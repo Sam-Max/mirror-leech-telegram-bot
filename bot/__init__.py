@@ -477,7 +477,7 @@ aria2c_global = [
     "server-stat-of",
 ]
 
-qb_client = get_client()
+qb_client = get_qb_client()
 if not qbit_options:
     qbit_options = dict(qb_client.app_preferences())
     for k in list(qbit_options.keys()):
