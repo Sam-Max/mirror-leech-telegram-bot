@@ -12,14 +12,33 @@ from bot.helper.ext_utils.bot_utils import sync_to_async
 from bot.helper.ext_utils.files_utils import ARCH_EXT, get_mime_type
 
 
-async def convert_video(listener, video_file, ext):
+async def convert_video(listener, video_file, ext, retry=False):
     base_name = ospath.splitext(video_file)[0]
     output = f"{base_name}.{ext}"
-    cmd = ["ffmpeg", "-i", video_file, "-c", "copy", output]
+    if retry:
+        cmd = [
+            "ffmpeg",
+            "-i",
+            video_file,
+            "-c:v",
+            "libx264",
+            "-c:a",
+            "aac",
+            "-threads",
+            f"{cpu_count() // 2}",
+            output,
+        ]
+        if ext == "mp4":
+            cmd[7:7] = ["-c:s", "mov_text"]
+        elif ext == "mkv":
+            cmd[7:7] = ["-c:s", "ass"]
+        else:
+            cmd[7:7] = ["-c:s", "copy"]
+    else:
+        cmd = ["ffmpeg", "-i", video_file, "-map", "0", "-c", "copy", output]
     if listener.cancelled:
         return False
-    async with subprocess_lock:
-        listener.suproc = await create_subprocess_exec(*cmd, stderr=PIPE)
+    listener.suproc = await create_subprocess_exec(*cmd, stderr=PIPE)
     _, stderr = await listener.suproc.communicate()
     if listener.cancelled:
         return False
@@ -27,23 +46,34 @@ async def convert_video(listener, video_file, ext):
     if code == 0:
         return output
     elif code == -9:
+        listener.cancelled = True
         return False
     else:
         stderr = stderr.decode().strip()
         LOGGER.error(
             f"{stderr}. Something went wrong while converting video, mostly file is corrupted. Path: {video_file}"
         )
+        if not retry:
+            if await aiopath.exists(output):
+                await remove(output)
+            return await convert_video(listener, video_file, ext, True)
     return False
 
 
 async def convert_audio(listener, audio_file, ext):
     base_name = ospath.splitext(audio_file)[0]
     output = f"{base_name}.{ext}"
-    cmd = ["ffmpeg", "-i", audio_file, output]
+    cmd = [
+        "ffmpeg",
+        "-i",
+        audio_file,
+        "-threads",
+        f"{cpu_count() // 2}",
+        output,
+    ]
     if listener.cancelled:
         return False
-    async with subprocess_lock:
-        listener.suproc = await create_subprocess_exec(*cmd, stderr=PIPE)
+    listener.suproc = await create_subprocess_exec(*cmd, stderr=PIPE)
     _, stderr = await listener.suproc.communicate()
     if listener.cancelled:
         return False
@@ -51,12 +81,15 @@ async def convert_audio(listener, audio_file, ext):
     if code == 0:
         return output
     elif code == -9:
+        listener.cancelled = True
         return False
     else:
         stderr = stderr.decode().strip()
         LOGGER.error(
             f"{stderr}. Something went wrong while converting audio, mostly file is corrupted. Path: {audio_file}"
         )
+        if await aiopath.exists(output):
+            await remove(output)
     return False
 
 
@@ -362,6 +395,7 @@ async def split_file(
                 return False
             code = listener.suproc.returncode
             if code == -9:
+                listener.cancelled = True
                 return False
             elif code != 0:
                 stderr = stderr.decode().strip()
@@ -440,6 +474,7 @@ async def split_file(
             return False
         code = listener.suproc.returncode
         if code == -9:
+            listener.cancelled = True
             return False
         elif code != 0:
             stderr = stderr.decode().strip()
@@ -502,6 +537,7 @@ async def createSampleVideo(listener, video_file, sample_duration, part_duration
         return False
     code = listener.suproc.returncode
     if code == -9:
+        listener.cancelled = True
         return False
     elif code == 0:
         return output_file
@@ -510,4 +546,6 @@ async def createSampleVideo(listener, video_file, sample_duration, part_duration
         LOGGER.error(
             f"{stderr}. Something went wrong while creating sample video, mostly file is corrupted. Path: {video_file}"
         )
+        if await aiopath.exists(output_file):
+            await remove(output_file)
         return False
