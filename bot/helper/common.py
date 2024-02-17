@@ -657,7 +657,7 @@ class TaskConfig:
                 await cpu_eater_lock.acquire()
                 LOGGER.info(f"Creating Sample video: {self.name}")
                 res = await createSampleVideo(
-                    self, dl_path, sample_duration, part_duration, True
+                    self, dl_path, sample_duration, part_duration
                 )
                 cpu_eater_lock.release()
                 if res:
@@ -812,6 +812,7 @@ class TaskConfig:
                         cpu_eater_lock.release()
                         return False
                     f_path = ospath.join(dirpath, file_)
+                    LOGGER.info(f"Converting: {f_path}")
                     res = await proceedConvert(f_path)
                     if res:
                         if self.seed and not self.newDir:
