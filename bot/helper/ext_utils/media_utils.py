@@ -36,24 +36,27 @@ async def convert_video(listener, video_file, ext, retry=False):
             cmd[7:7] = ["-c:s", "copy"]
     else:
         cmd = ["ffmpeg", "-i", video_file, "-map", "0", "-c", "copy", output]
-    if listener.cancelled:
+    if listener.isCancelled:
         return False
     listener.suproc = await create_subprocess_exec(*cmd, stderr=PIPE)
     _, stderr = await listener.suproc.communicate()
-    if listener.cancelled:
+    if listener.isCancelled:
         return False
     code = listener.suproc.returncode
     if code == 0:
         return output
     elif code == -9:
-        listener.cancelled = True
+        listener.isCancelled = True
         return False
     else:
-        stderr = stderr.decode().strip()
-        LOGGER.error(
-            f"{f'{stderr}. ' if retry else ''}Something went wrong while converting video, mostly file need specific codec. {'Retrying with specific codec' if not retry else ''}. Path: {video_file}"
-        )
         if not retry:
+            try:
+                stderr = stderr.decode().strip()
+            except:
+                stderr = "Unable to decode the error!"
+            LOGGER.error(
+                f"{stderr}Something went wrong while converting video, mostly file need specific codec. Path: {video_file}"
+            )
             if await aiopath.exists(output):
                 await remove(output)
             return await convert_video(listener, video_file, ext, True)
@@ -71,20 +74,23 @@ async def convert_audio(listener, audio_file, ext):
         f"{cpu_count() // 2}",
         output,
     ]
-    if listener.cancelled:
+    if listener.isCancelled:
         return False
     listener.suproc = await create_subprocess_exec(*cmd, stderr=PIPE)
     _, stderr = await listener.suproc.communicate()
-    if listener.cancelled:
+    if listener.isCancelled:
         return False
     code = listener.suproc.returncode
     if code == 0:
         return output
     elif code == -9:
-        listener.cancelled = True
+        listener.isCancelled = True
         return False
     else:
-        stderr = stderr.decode().strip()
+        try:
+            stderr = stderr.decode().strip()
+        except:
+            stderr = "Unable to decode the error!"
         LOGGER.error(
             f"{stderr}. Something went wrong while converting audio, mostly file need specific codec. Path: {audio_file}"
         )
@@ -119,8 +125,6 @@ async def is_multi_streams(path):
                 path,
             ]
         )
-        if res := result[1]:
-            LOGGER.warning(f"Get Video Streams: {res} - File: {path}")
     except Exception as e:
         LOGGER.error(f"Get Video Streams: {e}. Mostly File not found! - File: {path}")
         return False
@@ -154,8 +158,6 @@ async def get_media_info(path):
                 path,
             ]
         )
-        if res := result[1]:
-            LOGGER.warning(f"Get Media Info: {res} - File: {path}")
     except Exception as e:
         LOGGER.error(f"Get Media Info: {e}. Mostly File not found! - File: {path}")
         return 0, None, None
@@ -199,7 +201,6 @@ async def get_document_type(path):
             ]
         )
         if res := result[1]:
-            LOGGER.warning(f"Get Document Type: {res} - File: {path}")
             if mime_type.startswith("video"):
                 is_video = True
     except Exception as e:
@@ -339,6 +340,7 @@ async def split_file(
     path,
     size,
     dirpath,
+    file_,
     split_size,
     listener,
     start_time=0,
@@ -356,10 +358,10 @@ async def split_file(
         if multi_streams:
             multi_streams = await is_multi_streams(path)
         duration = (await get_media_info(path))[0]
-        base_name, extension = ospath.splitext(path)
+        base_name, extension = ospath.splitext(file_)
         split_size -= 5000000
         while i <= parts or start_time < duration - 4:
-            out_path = f"{base_name}.part{i:03}{extension}"
+            out_path = f"{dirpath}/{base_name}.part{i:03}{extension}"
             cmd = [
                 "ffmpeg",
                 "-hide_banner",
@@ -386,19 +388,22 @@ async def split_file(
             if not multi_streams:
                 del cmd[10]
                 del cmd[10]
-            if listener.cancelled:
+            if listener.isCancelled:
                 return False
             async with subprocess_lock:
                 listener.suproc = await create_subprocess_exec(*cmd, stderr=PIPE)
             _, stderr = await listener.suproc.communicate()
-            if listener.cancelled:
+            if listener.isCancelled:
                 return False
             code = listener.suproc.returncode
             if code == -9:
-                listener.cancelled = True
+                listener.isCancelled = True
                 return False
             elif code != 0:
-                stderr = stderr.decode().strip()
+                try:
+                    stderr = stderr.decode().strip()
+                except:
+                    stderr = "Unable to decode the error!"
                 try:
                     await remove(out_path)
                 except:
@@ -411,6 +416,7 @@ async def split_file(
                         path,
                         size,
                         dirpath,
+                        file_,
                         split_size,
                         listener,
                         start_time,
@@ -432,6 +438,7 @@ async def split_file(
                     path,
                     size,
                     dirpath,
+                    file_,
                     split_size,
                     listener,
                     start_time,
@@ -456,9 +463,9 @@ async def split_file(
             start_time += lpd - 3
             i += 1
     else:
-        out_path = f"{path}."
+        out_path = f"{dirpath}/{file_}."
         async with subprocess_lock:
-            if listener.cancelled:
+            if listener.isCancelled:
                 return False
             listener.suproc = await create_subprocess_exec(
                 "split",
@@ -470,14 +477,17 @@ async def split_file(
                 stderr=PIPE,
             )
         _, stderr = await listener.suproc.communicate()
-        if listener.cancelled:
+        if listener.isCancelled:
             return False
         code = listener.suproc.returncode
         if code == -9:
-            listener.cancelled = True
+            listener.isCancelled = True
             return False
         elif code != 0:
-            stderr = stderr.decode().strip()
+            try:
+                stderr = stderr.decode().strip()
+            except:
+                stderr = "Unable to decode the error!"
             LOGGER.error(f"{stderr}. Split Document: {path}")
     return True
 
@@ -529,20 +539,23 @@ async def createSampleVideo(listener, video_file, sample_duration, part_duration
         output_file,
     ]
 
-    if listener.cancelled:
+    if listener.isCancelled:
         return False
     listener.suproc = await create_subprocess_exec(*cmd, stderr=PIPE)
     _, stderr = await listener.suproc.communicate()
-    if listener.cancelled:
+    if listener.isCancelled:
         return False
     code = listener.suproc.returncode
     if code == -9:
-        listener.cancelled = True
+        listener.isCancelled = True
         return False
     elif code == 0:
         return output_file
     else:
-        stderr = stderr.decode().strip()
+        try:
+            stderr = stderr.decode().strip()
+        except:
+            stderr = "Unable to decode the error!"
         LOGGER.error(
             f"{stderr}. Something went wrong while creating sample video, mostly file is corrupted. Path: {video_file}"
         )

@@ -1,7 +1,13 @@
 from aiofiles import open as aiopen
 from aiofiles.os import remove, rename, path as aiopath
 from aioshutil import rmtree
-from asyncio import create_subprocess_exec, create_subprocess_shell, sleep, gather
+from asyncio import (
+    create_subprocess_exec,
+    create_subprocess_shell,
+    sleep,
+    gather,
+    wait_for,
+)
 from dotenv import load_dotenv
 from functools import partial
 from io import BytesIO
@@ -29,11 +35,13 @@ from bot import (
     get_qb_client,
     LOGGER,
     bot,
+    jd_downloads,
 )
 from bot.helper.ext_utils.bot_utils import (
     setInterval,
     sync_to_async,
     new_thread,
+    retry_function,
 )
 from bot.helper.ext_utils.db_handler import DbManager
 from bot.helper.ext_utils.jdownloader_booter import jdownloader
@@ -190,10 +198,10 @@ async def edit_variable(_, message, pre_message, key):
     elif key == "STATUS_UPDATE_INTERVAL":
         value = int(value)
         if len(task_dict) != 0 and (st := Intervals["status"]):
-            for key, intvl in list(st.items()):
+            for cid, intvl in list(st.items()):
                 intvl.cancel()
-                Intervals["status"][key] = setInterval(
-                    value, update_status_message, key
+                Intervals["status"][cid] = setInterval(
+                    value, update_status_message, cid
                 )
     elif key == "TORRENT_TIMEOUT":
         value = int(value)
@@ -311,11 +319,18 @@ async def sync_jdownloader():
         await sync_to_async(jdownloader.device.system.exit_jd)
         if await aiopath.exists("cfg.zip"):
             await remove("cfg.zip")
-        await sleep(5)
+        await sleep(6)
         await (
             await create_subprocess_exec("7z", "a", "cfg.zip", "/JDownloader/cfg")
         ).wait()
         await DbManager().update_private_file("cfg.zip")
+        try:
+            await wait_for(retry_function(jdownloader.update_devices), timeout=5)
+        except:
+            is_connected = await sync_to_async(jdownloader.jdconnect)
+            if not is_connected:
+                LOGGER.error(jdownloader.error)
+                return
         await sync_to_async(jdownloader.connectToDevice)
 
 
@@ -327,9 +342,9 @@ async def update_private_file(_, message, pre_message):
             await remove(fn)
         if fn == "accounts":
             if await aiopath.exists("accounts"):
-                await rmtree("accounts")
+                await rmtree("accounts", ignore_errors=True)
             if await aiopath.exists("rclone_sa"):
-                await rmtree("rclone_sa")
+                await rmtree("rclone_sa", ignore_errors=True)
             config_dict["USE_SERVICE_ACCOUNTS"] = False
             if DATABASE_URL:
                 await DbManager().update_config({"USE_SERVICE_ACCOUNTS": False})
@@ -343,9 +358,9 @@ async def update_private_file(_, message, pre_message):
         await message.download(file_name=f"{getcwd()}/{file_name}")
         if file_name == "accounts.zip":
             if await aiopath.exists("accounts"):
-                await rmtree("accounts")
+                await rmtree("accounts", ignore_errors=True)
             if await aiopath.exists("rclone_sa"):
-                await rmtree("rclone_sa")
+                await rmtree("rclone_sa", ignore_errors=True)
             await (
                 await create_subprocess_exec(
                     "7z", "x", "-o.", "-aoa", "accounts.zip", "accounts/*.json"
@@ -439,6 +454,12 @@ async def edit_bot_settings(client, query):
         if not config_dict["JD_EMAIL"] or not config_dict["JD_PASS"]:
             await query.answer(
                 "No Email or Password provided!",
+                show_alert=True,
+            )
+            return
+        if jd_downloads:
+            await query.answer(
+                "You can't sync settings while using jdownloader!",
                 show_alert=True,
             )
             return

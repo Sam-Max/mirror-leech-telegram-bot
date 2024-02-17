@@ -65,6 +65,8 @@ def direct_link_generator(link):
         return shrdsk(link)
     elif "u.pcloud.link" in domain:
         return pcloud(link)
+    elif "qiwi.gg" in domain:
+        return qiwi(link)
     elif any(x in domain for x in ["akmfiles.com", "akmfls.xyz"]):
         return akmfiles(link)
     elif any(
@@ -89,6 +91,9 @@ def direct_link_generator(link):
             "dood.stream",
             "doods.pro",
             "ds2play.com",
+            "d0o0d.com",
+            "ds2video.com",
+            "do0od.com",
         ]
     ):
         return doods(link)
@@ -118,6 +123,7 @@ def direct_link_generator(link):
             "teraboxapp.com",
             "1024tera.com",
             "terabox.app",
+            "gibibox.com",
         ]
     ):
         return terabox(link)
@@ -140,7 +146,15 @@ def direct_link_generator(link):
         return filelions_and_streamwish(link)
     elif any(x in domain for x in ["streamhub.ink", "streamhub.to"]):
         return streamhub(link)
-    elif any(x in domain for x in ["linkbox.to", "lbx.to"]):
+    elif any(
+        x in domain
+        for x in [
+            "linkbox.to",
+            "lbx.to",
+            "teltobx.net",
+            "telbx.net",
+        ]
+    ):
         return linkBox(link)
     elif is_share_link(link):
         if "gdtot" in domain:
@@ -266,7 +280,7 @@ def onedrive(link):
             parsed_link = urlparse(link)
             link_data = parse_qs(parsed_link.query)
         except Exception as e:
-            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}")
+            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from e
         if not link_data:
             raise DirectDownloadLinkException("ERROR: Unable to find link_data")
         folder_id = link_data.get("resid")
@@ -812,8 +826,11 @@ def linkBox(url: str):
             if "msg" in _json:
                 raise DirectDownloadLinkException(f"ERROR: {_json['msg']}")
             raise DirectDownloadLinkException("ERROR: data not found")
-        if data["shareType"] == "singleItem":
-            return __singleItem(session, data["itemId"])
+        try:
+            if data["shareType"] == "singleItem":
+                return __singleItem(session, data["itemId"])
+        except:
+            pass
         if not details["title"]:
             details["title"] = data["dirName"]
         contents = data["list"]
@@ -1492,3 +1509,19 @@ def tmpsend(url):
     header = f"Referer: {referer_url}"
     download_link = f"https://tmpsend.com/download?d={file_id}"
     return download_link, header
+
+def qiwi(url):
+    """qiwi.gg link generator
+    based on https://github.com/aenulrofik"""
+    with Session() as session:
+        file_id = url.split("/")[-1]
+        try:
+            res = session.get(url).text
+        except Exception as e:
+            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from e
+        tree = HTML(res)
+        if name := tree.xpath('//h1[@class="page_TextHeading__VsM7r"]/text()'):
+            ext = name[0].split('.')[-1]
+            return f"https://qiwi.lol/{file_id}.{ext}"
+        else:
+            raise DirectDownloadLinkException("ERROR: File not found")
