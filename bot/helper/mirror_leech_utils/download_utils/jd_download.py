@@ -13,15 +13,15 @@ from bot import (
     jd_lock,
     jd_downloads,
 )
-from bot.helper.ext_utils.bot_utils import new_thread, retry_function, sync_to_async
+from bot.helper.ext_utils.bot_utils import new_thread, retry_function
 from bot.helper.ext_utils.jdownloader_booter import jdownloader
 from bot.helper.ext_utils.task_manager import (
     check_running_tasks,
     stop_duplicate_check,
 )
 from bot.helper.listeners.jdownloader_listener import onDownloadStart
-from bot.helper.mirror_utils.status_utils.jdownloader_status import JDownloaderStatus
-from bot.helper.mirror_utils.status_utils.queue_status import QueueStatus
+from bot.helper.mirror_leech_utils.status_utils.jdownloader_status import JDownloaderStatus
+from bot.helper.mirror_leech_utils.status_utils.queue_status import QueueStatus
 from bot.helper.telegram_helper.button_build import ButtonMaker
 from bot.helper.telegram_helper.message_utils import (
     sendMessage,
@@ -96,7 +96,7 @@ async def add_jd_download(listener, path):
             if not is_connected:
                 await listener.onDownloadError(jdownloader.error)
                 return
-            await sync_to_async(jdownloader.connectToDevice)
+            await jdownloader.connectToDevice()
 
         if not jd_downloads:
             await retry_function(jdownloader.device.linkgrabber.clear_list)
@@ -106,6 +106,17 @@ async def add_jd_download(listener, path):
                 odl_list = [od["uuid"] for od in odl]
                 await retry_function(
                     jdownloader.device.downloads.remove_links,
+                    package_ids=odl_list,
+                )
+        elif odl := await retry_function(
+            jdownloader.device.linkgrabber.query_packages, [{}]
+        ):
+            odl_list = [
+                od["uuid"] for od in odl if od["saveTo"].startswith("/root/Downloads/")
+            ]
+            if odl_list:
+                await retry_function(
+                    jdownloader.device.linkgrabber.remove_links,
                     package_ids=odl_list,
                 )
 

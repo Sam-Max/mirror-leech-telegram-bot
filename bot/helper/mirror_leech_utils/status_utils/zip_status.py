@@ -1,7 +1,6 @@
 from time import time
 
 from bot import LOGGER, subprocess_lock
-from bot.helper.ext_utils.bot_utils import async_to_sync
 from bot.helper.ext_utils.files_utils import get_path_size
 from bot.helper.ext_utils.status_utils import (
     get_readable_file_size,
@@ -10,27 +9,29 @@ from bot.helper.ext_utils.status_utils import (
 )
 
 
-class ExtractStatus:
+class ZipStatus:
     def __init__(self, listener, gid):
         self.listener = listener
         self._size = self.listener.size
         self._gid = gid
         self._start_time = time()
+        self._proccessed_bytes = 0
 
     def gid(self):
         return self._gid
 
     def speed_raw(self):
-        return self.processed_raw() / (time() - self._start_time)
+        return self._proccessed_bytes / (time() - self._start_time)
 
-    def progress_raw(self):
+    async def progress_raw(self):
+        await self.processed_raw()
         try:
-            return self.processed_raw() / self._size * 100
+            return self._proccessed_bytes / self._size * 100
         except:
             return 0
 
-    def progress(self):
-        return f"{round(self.progress_raw(), 2)}%"
+    async def progress(self):
+        return f"{round(await self.progress_raw(), 2)}%"
 
     def speed(self):
         return f"{get_readable_file_size(self.speed_raw())}/s"
@@ -43,28 +44,28 @@ class ExtractStatus:
 
     def eta(self):
         try:
-            seconds = (self._size - self.processed_raw()) / self.speed_raw()
+            seconds = (self._size - self._proccessed_bytes) / self.speed_raw()
             return get_readable_time(seconds)
         except:
             return "-"
 
     async def status(self):
-        return MirrorStatus.STATUS_EXTRACTING
+        return MirrorStatus.STATUS_ARCHIVING
+
+    async def processed_raw(self):
+        if self.listener.newDir:
+            self._proccessed_bytes = await get_path_size(self.listener.newDir)
+        else:
+            self._proccessed_bytes = await get_path_size(self.listener.dir) - self._size
 
     def processed_bytes(self):
-        return get_readable_file_size(self.processed_raw())
-
-    def processed_raw(self):
-        if self.listener.newDir:
-            return async_to_sync(get_path_size, self.listener.newDir)
-        else:
-            return async_to_sync(get_path_size, self.listener.dir) - self._size
+        return get_readable_file_size(self._proccessed_bytes)
 
     def task(self):
         return self
 
     async def cancel_task(self):
-        LOGGER.info(f"Cancelling Extract: {self.listener.name}")
+        LOGGER.info(f"Cancelling Archive: {self.listener.name}")
         self.listener.isCancelled = True
         async with subprocess_lock:
             if (
@@ -72,4 +73,4 @@ class ExtractStatus:
                 and self.listener.suproc.returncode is None
             ):
                 self.listener.suproc.kill()
-        await self.listener.onUploadError("extracting stopped by user!")
+        await self.listener.onUploadError("archiving stopped by user!")
