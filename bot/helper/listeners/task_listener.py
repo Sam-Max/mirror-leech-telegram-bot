@@ -1,4 +1,4 @@
-from aiofiles.os import path as aiopath, listdir, makedirs
+from aiofiles.os import path as aiopath, listdir, makedirs, remove
 from aioshutil import move
 from asyncio import sleep, gather
 from html import escape
@@ -268,14 +268,6 @@ class TaskListener(TaskConfig):
                         fmsg = ""
                 if fmsg != "":
                     await sendMessage(self.message, msg + fmsg)
-            if self.seed:
-                if self.newDir:
-                    await clean_target(self.newDir)
-                async with queue_dict_lock:
-                    if self.mid in non_queued_up:
-                        non_queued_up.remove(self.mid)
-                await start_from_queued()
-                return
         else:
             msg += f"\n\n<b>Type: </b>{mime_type}"
             if mime_type == "Folder":
@@ -321,15 +313,14 @@ class TaskListener(TaskConfig):
                 button = None
             msg += f"\n\n<b>cc: </b>{self.tag}"
             await sendMessage(self.message, msg, button)
-            if self.seed:
-                if self.newDir:
-                    await clean_target(self.newDir)
-                async with queue_dict_lock:
-                    if self.mid in non_queued_up:
-                        non_queued_up.remove(self.mid)
-                await start_from_queued()
-                return
-
+        if self.seed:
+            if self.newDir:
+                await clean_target(self.newDir)
+            async with queue_dict_lock:
+                if self.mid in non_queued_up:
+                    non_queued_up.remove(self.mid)
+            await start_from_queued()
+            return
         await clean_download(self.dir)
         async with task_dict_lock:
             if self.mid in task_dict:
@@ -383,6 +374,8 @@ class TaskListener(TaskConfig):
         await clean_download(self.dir)
         if self.newDir:
             await clean_download(self.newDir)
+        if self.thumb and await aiopath.exists(self.thumb):
+            await remove(self.thumb)
 
     async def onUploadError(self, error):
         async with task_dict_lock:
@@ -419,3 +412,5 @@ class TaskListener(TaskConfig):
         await clean_download(self.dir)
         if self.newDir:
             await clean_download(self.newDir)
+        if self.thumb and await aiopath.exists(self.thumb):
+            await remove(self.thumb)

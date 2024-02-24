@@ -43,10 +43,12 @@ class JDownloader(Myjdapi):
         self.error = "Connecting... Try agin after couple of seconds"
         self._device_name = f"{randint(0, 1000)}@{bot_name}"
         if await path.exists("/JDownloader/logs"):
-            LOGGER.info("Starting JDownloader... This might take up to 10 sec")
+            LOGGER.info(
+                "Starting JDownloader... This might take up to 10 sec and might restart once if update available!"
+            )
         else:
             LOGGER.info(
-                "Starting JDownloader... This might take up to 10 sec and might restart once after build!"
+                "Starting JDownloader... This might take up to 8 sec and might restart once after build!"
             )
         jdata = {
             "autoconnectenabledv2": True,
