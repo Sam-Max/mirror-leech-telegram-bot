@@ -289,7 +289,7 @@ class YtDlp(TaskListener):
         input_list = text[0].split(" ")
         qual = ""
 
-        arg_base = {
+        args = {
             "-s": False,
             "-b": False,
             "-z": False,
@@ -309,9 +309,10 @@ class YtDlp(TaskListener):
             "-t": "",
             "-ca": "",
             "-cv": "",
+            "-ns": "",
         }
 
-        args = arg_parser(input_list[1:], arg_base)
+        arg_parser(input_list[1:], args)
 
         try:
             self.multi = int(args["-i"])
@@ -333,6 +334,7 @@ class YtDlp(TaskListener):
         self.forceUpload = args["-fu"]
         self.convertAudio = args["-ca"]
         self.convertVideo = args["-cv"]
+        self.nameSub = args["-ns"]
 
         isBulk = args["-b"]
         folder_name = args["-m"]
