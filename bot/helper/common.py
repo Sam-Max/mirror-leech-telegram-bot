@@ -156,7 +156,8 @@ class TaskConfig:
 
     async def beforeStart(self):
         self.nameSub = (
-            self.userDict.get("name_sub", False) or config_dict["NAME_SUBSTITUTE"]
+            self.nameSub
+            or self.userDict.get("name_sub", False) or config_dict["NAME_SUBSTITUTE"]
             if "name_sub" not in self.userDict
             else ""
         )
@@ -908,7 +909,7 @@ class TaskConfig:
                 pattern = l[0]
                 res = l[1] if len(l) > 1  and l[1] else ""
                 sen = len(l) > 2 and l[2] == "s"
-                new_name = sub(fr"{pattern}", res, name, flags= I if sen else 0)
+                new_name = sub(fr"{pattern}", res, name, flags=I if sen else 0)
             new_path = ospath.join(up_dir, new_name)
             await move(dl_path, new_path)
             return new_path
@@ -920,6 +921,6 @@ class TaskConfig:
                         pattern = l[0]
                         res = l[1] if len(l) > 1  and l[1] else ""
                         sen = len(l) > 2 and l[2] == "s"
-                        new_name = sub(fr"{pattern}", res, name, flags= I if sen else 0)
+                        new_name = sub(rf"{pattern}", res, file_, flags=I if sen else 0)
                     await move(f_path, ospath.join(dirpath, new_name))
             return dl_path
