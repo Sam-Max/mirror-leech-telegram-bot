@@ -14,7 +14,6 @@ from bot import (
     config_dict,
     aria2_options,
     qbit_options,
-    bot_loop,
 )
 
 
@@ -38,8 +37,8 @@ class DbManager:
             return
         # Save bot settings
         try:
-            await self._db.settings.config.update_one(
-                {"_id": bot_id}, {"$set": config_dict}, upsert=True
+            res = await self._db.settings.config.replace_one(
+                {"_id": bot_id}, config_dict, upsert=True
             )
         except Exception as e:
             LOGGER.error(f"DataBase Collection Error: {e}")
@@ -52,8 +51,13 @@ class DbManager:
             )
         # Save qbittorrent options
         if await self._db.settings.qbittorrent.find_one({"_id": bot_id}) is None:
-            await self._db.settings.qbittorrent.update_one(
-                {"_id": bot_id}, {"$set": qbit_options}, upsert=True
+            await self.save_qbit_settings()
+        # Save nzb config
+        if await self._db.settings.nzb.find_one({"_id": bot_id}) is None:
+            async with aiopen("sabnzbd/SABnzbd.ini", "rb+") as pf:
+                nzb_conf = await pf.read()
+            await self._db.settings.nzb.update_one(
+                {"_id": bot_id}, {"$set": {"SABnzbd__ini": nzb_conf}}, upsert=True
             )
         # User Data
         if await self._db.users.find_one():
@@ -129,6 +133,14 @@ class DbManager:
         )
         self._conn.close
 
+    async def save_qbit_settings(self):
+        if self._err:
+            return
+        await self._db.settings.qbittorrent.replace_one(
+            {"_id": bot_id}, qbit_options, upsert=True
+        )
+        self._conn.close
+
     async def update_private_file(self, path):
         if self._err:
             return
@@ -145,6 +157,13 @@ class DbManager:
             await self.update_deploy_config()
         else:
             self._conn.close
+
+    async def update_nzb_config(self):
+        async with aiopen("sabnzbd/SABnzbd.ini", "rb+") as pf:
+            nzb_conf = await pf.read()
+        await self._db.settings.nzb.replace_one(
+            {"_id": bot_id}, {"SABnzbd__ini": nzb_conf}, upsert=True
+        )
 
     async def update_user_data(self, user_id):
         if self._err:
@@ -231,7 +250,3 @@ class DbManager:
             return
         await self._db[name][bot_id].drop()
         self._conn.close
-
-
-if DATABASE_URL:
-    bot_loop.run_until_complete(DbManager().db_load())

@@ -3,10 +3,28 @@ from flask import Flask, request
 from logging import getLogger, FileHandler, StreamHandler, INFO, basicConfig
 from qbittorrentapi import NotFound404Error, Client as qbClient
 from time import sleep
+from sabnzbdapi import sabnzbdClient
+from asyncio import get_event_loop
 
 from web.nodes import make_tree
 
 app = Flask(__name__)
+
+web_loop = get_event_loop()
+
+qbittorrent_client = qbClient(
+    host="localhost",
+    port=8090,
+    VERIFY_WEBUI_CERTIFICATE=False,
+    REQUESTS_ARGS={"timeout": (30, 60)},
+    HTTPADAPTER_ARGS={"pool_maxsize": 200, "pool_block": True},
+)
+
+sabnzbd_client = sabnzbdClient(
+    host="http://localhost",
+    api_key="mltb",
+    port="8070",
+)
 
 aria2 = ariaAPI(ariaClient(host="http://localhost", port=6800, secret=""))
 
@@ -651,7 +669,7 @@ section span{
 """
 
 
-def re_verfiy(paused, resumed, client, hash_id):
+def re_verfiy(paused, resumed, hash_id):
     paused = paused.strip()
     resumed = resumed.strip()
     if paused:
@@ -661,7 +679,7 @@ def re_verfiy(paused, resumed, client, hash_id):
 
     k = 0
     while True:
-        res = client.torrents_files(torrent_hash=hash_id)
+        res = qbittorrent_client.torrents_files(torrent_hash=hash_id)
         verify = True
         for i in res:
             if str(i.id) in paused and i.priority != 0:
@@ -673,11 +691,9 @@ def re_verfiy(paused, resumed, client, hash_id):
         if verify:
             break
         LOGGER.info("Reverification Failed! Correcting stuff...")
-        client.auth_log_out()
         sleep(1)
-        client = qbClient(host="localhost", port="8090")
         try:
-            client.torrents_file_priority(
+            qbittorrent_client.torrents_file_priority(
                 torrent_hash=hash_id, file_ids=paused, priority=0
             )
         except NotFound404Error as e:
@@ -685,7 +701,7 @@ def re_verfiy(paused, resumed, client, hash_id):
         except Exception as e:
             LOGGER.error(f"{e} Errored in reverification paused!")
         try:
-            client.torrents_file_priority(
+            qbittorrent_client.torrents_file_priority(
                 torrent_hash=hash_id, file_ids=resumed, priority=1
             )
         except NotFound404Error as e:
@@ -713,14 +729,20 @@ def list_torrent_contents(id_):
     if request.args["pin_code"] != pincode:
         return "<h1>Incorrect pin code</h1>"
 
-    if len(id_) > 20:
-        client = qbClient(host="localhost", port="8090")
-        res = client.torrents_files(torrent_hash=id_)
-        cont = make_tree(res)
-        client.auth_log_out()
+    if id_.startswith("SABnzbd_nzo"):
+
+        async def get_files():
+            res = await sabnzbd_client.get_files(id_)
+            return res
+
+        res = web_loop.run_until_complete(get_files())
+        cont = make_tree(res, "nzb")
+    elif len(id_) > 20:
+        res = qbittorrent_client.torrents_files(torrent_hash=id_)
+        cont = make_tree(res, "qbit")
     else:
         res = aria2.client.get_files(id_)
-        cont = make_tree(res, True)
+        cont = make_tree(res, "aria")
     return page.replace("{My_content}", cont[0]).replace(
         "{form_url}", f"/app/files/{id_}?pin_code={pincode}"
     )
@@ -730,10 +752,23 @@ def list_torrent_contents(id_):
 def set_priority(id_):
     data = dict(request.form)
 
-    resume = ""
-    if len(id_) > 20:
-        pause = ""
+    if id_.startswith("SABnzbd_nzo"):
 
+        to_remove = []
+        for i, value in data.items():
+            if "filenode" in i and value != "on":
+                node_no = i.split("_")[-1]
+                to_remove.append(node_no)
+
+        async def remove_files():
+            await sabnzbd_client.remove_file(id_, to_remove)
+
+        web_loop.run_until_complete(remove_files())
+        LOGGER.info(f"Verified! nzo_id: {id_}")
+
+    elif len(id_) > 20:
+        resume = ""
+        pause = ""
         for i, value in data.items():
             if "filenode" in i:
                 node_no = i.split("_")[-1]
@@ -746,25 +781,27 @@ def set_priority(id_):
         pause = pause.strip("|")
         resume = resume.strip("|")
 
-        client = qbClient(host="localhost", port="8090")
-
         try:
-            client.torrents_file_priority(torrent_hash=id_, file_ids=pause, priority=0)
+            qbittorrent_client.torrents_file_priority(
+                torrent_hash=id_, file_ids=pause, priority=0
+            )
         except NotFound404Error as e:
             raise NotFound404Error from e
         except Exception as e:
             LOGGER.error(f"{e} Errored in paused")
         try:
-            client.torrents_file_priority(torrent_hash=id_, file_ids=resume, priority=1)
+            qbittorrent_client.torrents_file_priority(
+                torrent_hash=id_, file_ids=resume, priority=1
+            )
         except NotFound404Error as e:
             raise NotFound404Error from e
         except Exception as e:
             LOGGER.error(f"{e} Errored in resumed")
         sleep(1)
-        if not re_verfiy(pause, resume, client, id_):
+        if not re_verfiy(pause, resume, id_):
             LOGGER.error(f"Verification Failed! Hash: {id_}")
-        client.auth_log_out()
     else:
+        resume = ""
         for i, value in data.items():
             if "filenode" in i and value == "on":
                 node_no = i.split("_")[-1]
@@ -788,7 +825,7 @@ def homepage():
 @app.errorhandler(Exception)
 def page_not_found(e):
     return (
-        f"<h1>404: Torrent not found! Mostly wrong input. <br><br>Error: {e}</h2>",
+        f"<h1>404: Task not found! Mostly wrong input. <br><br>Error: {e}</h2>",
         404,
     )
 

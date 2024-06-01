@@ -21,6 +21,7 @@ from bot import (
     GLOBAL_EXTENSION_FILTER,
     cpu_eater_lock,
     subprocess_lock,
+    Intervals,
 )
 from bot.helper.ext_utils.bot_utils import new_task, sync_to_async, getSizeBytes
 from bot.helper.ext_utils.bulk_links import extractBulkLinks
@@ -89,6 +90,7 @@ class TaskConfig:
         self.size = 0
         self.isLeech = False
         self.isQbit = False
+        self.isNzb = False
         self.isJd = False
         self.isClone = False
         self.isYtDlp = False
@@ -159,15 +161,17 @@ class TaskConfig:
         self.nameSub = (
             self.nameSub
             or self.userDict.get("name_sub", False)
-            or config_dict["NAME_SUBSTITUTE"]
-            if "name_sub" not in self.userDict
-            else ""
+            or (
+                config_dict["NAME_SUBSTITUTE"]
+                if "name_sub" not in self.userDict
+                else ""
+            )
         )
         if self.nameSub:
-            self.nameSub = [x.split(" : ") for x in self.nameSub.split("|")]
+            self.nameSub = [x.split(" : ") for x in self.nameSub.split(" | ")]
             self.seed = False
-        self.extensionFilter = (
-            self.userDict.get("excluded_extensions") or GLOBAL_EXTENSION_FILTER
+        self.extensionFilter = self.userDict.get("excluded_extensions") or (
+            GLOBAL_EXTENSION_FILTER
             if "excluded_extensions" not in self.userDict
             else ["aria2", "!qB"]
         )
@@ -364,7 +368,8 @@ class TaskConfig:
             self.multiTag = token_urlsafe(3)
             multi_tags.add(self.multiTag)
         elif self.multi <= 1:
-            multi_tags.discard(self.multiTag)
+            if self.multiTag in multi_tags:
+                multi_tags.discard(self.multiTag)
             return
         if self.multiTag and self.multiTag not in multi_tags:
             await sendMessage(
@@ -400,12 +405,15 @@ class TaskConfig:
             nextmsg.from_user = self.user
         else:
             nextmsg.sender_chat = self.user
+        if Intervals["stopAll"]:
+            return
         obj(
             self.client,
             nextmsg,
             self.isQbit,
             self.isLeech,
             self.isJd,
+            self.isNzb,
             self.sameDir,
             self.bulk,
             self.multiTag,
@@ -439,6 +447,7 @@ class TaskConfig:
                 self.isQbit,
                 self.isLeech,
                 self.isJd,
+                self.isNzb,
                 self.sameDir,
                 self.bulk,
                 self.multiTag,
