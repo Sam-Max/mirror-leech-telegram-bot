@@ -534,19 +534,6 @@ aria2c_global = [
     "server-stat-of",
 ]
 
-qb_client = get_qb_client()
-if not qbit_options:
-    qbit_options = dict(qb_client.app_preferences())
-    for k in list(qbit_options.keys()):
-        if k.startswith("rss"):
-            del qbit_options[k]
-else:
-    qb_opt = {**qbit_options}
-    for k, v in list(qb_opt.items()):
-        if v in ["", "*"]:
-            del qb_opt[k]
-    qb_client.app_set_preferences(qb_opt)
-
 log_info("Creating client from BOT_TOKEN")
 bot = tgClient(
     "bot",
