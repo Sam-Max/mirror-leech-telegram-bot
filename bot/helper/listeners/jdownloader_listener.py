@@ -94,9 +94,9 @@ async def _jd_listener():
                 if v["status"] == "down" and k not in all_packages:
                     cdi = jd_downloads[k]["ids"]
                     if len(cdi) > 1:
-                        update_download(k, v)
+                        await update_download(k, v)
                     else:
-                        remove_download(k)
+                        await remove_download(k)
                 else:
                     for index, pid in enumerate(v["ids"]):
                         if pid not in all_packages:
@@ -109,10 +109,10 @@ async def _jd_listener():
                     )
                     if is_finished:
                         jd_downloads[gid]["status"] = "done"
-                        _on_download_complete(gid)
+                        await _on_download_complete(gid)
 
 
 async def on_download_start():
     async with jd_lock:
         if not intervals["jd"]:
-            intervals["jd"] = _jd_listener()
+            intervals["jd"] = await _jd_listener()

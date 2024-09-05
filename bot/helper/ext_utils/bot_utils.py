@@ -1,6 +1,7 @@
 from httpx import AsyncClient
 from asyncio.subprocess import PIPE
 from functools import partial, wraps
+from concurrent.futures import ThreadPoolExecutor
 from asyncio import (
     create_subprocess_exec,
     create_subprocess_shell,
@@ -18,6 +19,7 @@ from .help_messages import (
 )
 
 COMMAND_USAGE = {}
+THREADPOOL = ThreadPoolExecutor(max_workers=99999)
 
 
 class SetInterval:
@@ -190,30 +192,18 @@ async def cmd_exec(cmd, shell=False):
     return stdout, stderr, proc.returncode
 
 
-def handler_new_task(func):
-    @wraps(func)
-    def wrapper(*args, **kwargs):
-        bot_loop.create_task(func(*args, **kwargs))
-
-        async def dummy():
-            pass
-
-        return dummy
-
-    return wrapper
-
-
 def new_task(func):
     @wraps(func)
-    def wrapper(*args, **kwargs):
-        return bot_loop.create_task(func(*args, **kwargs))
+    async def wrapper(*args, **kwargs):
+        task = bot_loop.create_task(func(*args, **kwargs))
+        return task
 
     return wrapper
 
 
 async def sync_to_async(func, *args, wait=True, **kwargs):
     pfunc = partial(func, *args, **kwargs)
-    future = bot_loop.run_in_executor(None, pfunc)
+    future = bot_loop.run_in_executor(THREADPOOL, pfunc)
     return await future if wait else future
 
 
