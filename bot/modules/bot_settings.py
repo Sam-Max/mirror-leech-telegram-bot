@@ -262,9 +262,6 @@ async def edit_variable(_, message, pre_message, key):
     elif key == "DOWNLOAD_DIR":
         if not value.endswith("/"):
             value += "/"
-    elif key in ["LEECH_DUMP_CHAT", "RSS_CHAT"]:
-        if value.isdigit() or value.startswith("-"):
-            value = int(value)
     elif key == "STATUS_UPDATE_INTERVAL":
         value = int(value)
         if len(task_dict) != 0 and (st := intervals["status"]):
@@ -732,7 +729,7 @@ async def edit_bot_settings(client, query):
         await query.answer(
             "Syncronization Started. It takes up to 2 sec!", show_alert=True
         )
-        await get_qb_options()
+        await sync_to_async(get_qb_options)
         if config_dict["DATABASE_URL"]:
             await database.save_qbit_settings()
     elif data[1] == "emptyaria":
@@ -1075,16 +1072,12 @@ async def load_config():
 
     LEECH_DUMP_CHAT = environ.get("LEECH_DUMP_CHAT", "")
     LEECH_DUMP_CHAT = "" if len(LEECH_DUMP_CHAT) == 0 else LEECH_DUMP_CHAT
-    if LEECH_DUMP_CHAT.isdigit() or LEECH_DUMP_CHAT.startswith("-"):
-        LEECH_DUMP_CHAT = int(LEECH_DUMP_CHAT)
 
     STATUS_LIMIT = environ.get("STATUS_LIMIT", "")
     STATUS_LIMIT = 4 if len(STATUS_LIMIT) == 0 else int(STATUS_LIMIT)
 
     RSS_CHAT = environ.get("RSS_CHAT", "")
     RSS_CHAT = "" if len(RSS_CHAT) == 0 else RSS_CHAT
-    if RSS_CHAT.isdigit() or RSS_CHAT.startswith("-"):
-        RSS_CHAT = int(RSS_CHAT)
 
     RSS_DELAY = environ.get("RSS_DELAY", "")
     RSS_DELAY = 600 if len(RSS_DELAY) == 0 else int(RSS_DELAY)
@@ -1188,6 +1181,9 @@ async def load_config():
     MIXED_LEECH = environ.get("MIXED_LEECH", "")
     MIXED_LEECH = MIXED_LEECH.lower() == "true" and IS_PREMIUM_USER
 
+    THUMBNAIL_LAYOUT = environ.get("THUMBNAIL_LAYOUT", "")
+    THUMBNAIL_LAYOUT = "" if len(THUMBNAIL_LAYOUT) == 0 else THUMBNAIL_LAYOUT
+
     await (await create_subprocess_exec("pkill", "-9", "-f", "gunicorn")).wait()
     BASE_URL = environ.get("BASE_URL", "").rstrip("/")
     if len(BASE_URL) == 0:
@@ -1274,6 +1270,7 @@ async def load_config():
             "SUDO_USERS": SUDO_USERS,
             "TELEGRAM_API": TELEGRAM_API,
             "TELEGRAM_HASH": TELEGRAM_HASH,
+            "THUMBNAIL_LAYOUT": THUMBNAIL_LAYOUT,
             "TORRENT_TIMEOUT": TORRENT_TIMEOUT,
             "USER_TRANSMISSION": USER_TRANSMISSION,
             "UPSTREAM_REPO": UPSTREAM_REPO,

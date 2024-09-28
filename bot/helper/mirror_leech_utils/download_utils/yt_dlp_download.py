@@ -248,6 +248,11 @@ class YoutubeDLHelper:
                 "default": f"{path}/{self._listener.name}/%(title,fulltitle,alt_title)s%(season_number& |)s%(season_number&S|)s%(season_number|)02d%(episode_number&E|)s%(episode_number|)02d%(height& |)s%(height|)s%(height&p|)s%(fps|)s%(fps&fps|)s%(tbr& |)s%(tbr|)d.%(ext)s",
                 "thumbnail": f"{path}/yt-dlp-thumb/%(title,fulltitle,alt_title)s%(season_number& |)s%(season_number&S|)s%(season_number|)02d%(episode_number&E|)s%(episode_number|)02d%(height& |)s%(height|)s%(height&p|)s%(fps|)s%(fps&fps|)s%(tbr& |)s%(tbr|)d.%(ext)s",
             }
+        elif "download_ranges" in options:
+            self.opts["outtmpl"] = {
+                "default": f"{path}/{base_name}/%(section_number|)s%(section_number&.|)s%(section_title|)s%(section_title&-|)s%(title,fulltitle,alt_title)s %(section_start)s to %(section_end)s.%(ext)s",
+                "thumbnail": f"{path}/yt-dlp-thumb/%(section_number|)s%(section_number&.|)s%(section_title|)s%(section_title&-|)s%(title,fulltitle,alt_title)s %(section_start)s to %(section_end)s.%(ext)s",
+            }
         elif any(
             key in options
             for key in [
@@ -274,7 +279,7 @@ class YoutubeDLHelper:
         if qual.startswith("ba/b"):
             self._listener.name = f"{base_name}{self._ext}"
 
-        if self._listener.is_leech:
+        if self._listener.is_leech and not self._listener.thumbnail_layout:
             self.opts["postprocessors"].append(
                 {
                     "format": "jpg",
@@ -296,7 +301,9 @@ class YoutubeDLHelper:
         ]:
             self.opts["postprocessors"].append(
                 {
-                    "already_have_thumbnail": self._listener.is_leech,
+                    "already_have_thumbnail": bool(
+                        self._listener.is_leech and not self._listener.thumbnail_layout
+                    ),
                     "key": "EmbedThumbnail",
                 }
             )
@@ -355,5 +362,8 @@ class YoutubeDLHelper:
                     self.opts[key].extend(tuple(value))
                 elif isinstance(value, dict):
                     self.opts[key].append(value)
+            elif key == "download_ranges":
+                if isinstance(value, list):
+                    self.opts[key] = lambda info, ytdl: value
             else:
                 self.opts[key] = value

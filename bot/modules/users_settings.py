@@ -81,15 +81,15 @@ async def get_user_settings(from_user):
 
     if user_dict.get("lprefix", False):
         lprefix = user_dict["lprefix"]
-    elif "lprefix" not in user_dict and (LP := config_dict["LEECH_FILENAME_PREFIX"]):
-        lprefix = LP
+    elif "lprefix" not in user_dict and config_dict["LEECH_FILENAME_PREFIX"]:
+        lprefix = config_dict["LEECH_FILENAME_PREFIX"]
     else:
         lprefix = "None"
 
     if user_dict.get("leech_dest", False):
         leech_dest = user_dict["leech_dest"]
-    elif "leech_dest" not in user_dict and (LD := config_dict["LEECH_DUMP_CHAT"]):
-        leech_dest = LD
+    elif "leech_dest" not in user_dict and config_dict["LEECH_DUMP_CHAT"]:
+        leech_dest = config_dict["LEECH_DUMP_CHAT"]
     else:
         leech_dest = "None"
 
@@ -112,6 +112,13 @@ async def get_user_settings(from_user):
         mixed_leech = "Enabled"
     else:
         mixed_leech = "Disabled"
+
+    if user_dict.get("thumb_layout", False):
+        thumb_layout = user_dict["thumb_layout"]
+    elif "thumb_layout" not in user_dict and config_dict["THUMBNAIL_LAYOUT"]:
+        thumb_layout = config_dict["THUMBNAIL_LAYOUT"]
+    else:
+        thumb_layout = "None"
 
     buttons.data_button("Leech", f"userset {user_id} leech")
 
@@ -186,6 +193,7 @@ Leech Prefix is <code>{escape(lprefix)}</code>
 Leech Destination is <code>{leech_dest}</code>
 Leech by <b>{leech_method}</b> session
 Mixed Leech is <b>{mixed_leech}</b>
+Thumbnail Layout is <b>{thumb_layout}</b>
 Rclone Config <b>{rccmsg}</b>
 Rclone Path is <code>{rccpath}</code>
 Gdrive Token <b>{tokenmsg}</b>
@@ -282,9 +290,6 @@ async def set_option(_, message, pre_event, option):
         if not value.isdigit():
             value = get_size_bytes(value)
         value = min(int(value), MAX_SPLIT_SIZE)
-    elif option == "leech_dest":
-        if value.startswith("-") or value.isdigit():
-            value = int(value)
     elif option == "excluded_extensions":
         fx = value.split()
         value = ["aria2", "!qB"]
@@ -390,6 +395,7 @@ async def edit_user_settings(client, query):
         "index_url",
         "excluded_extensions",
         "name_sub",
+        "thumb_layout",
     ]:
         await query.answer()
         update_user_ldata(user_id, data[2], "")
@@ -417,17 +423,15 @@ async def edit_user_settings(client, query):
         buttons.data_button("Leech Destination", f"userset {user_id} ldest")
         if user_dict.get("leech_dest", False):
             leech_dest = user_dict["leech_dest"]
-        elif "leech_dest" not in user_dict and (LD := config_dict["LEECH_DUMP_CHAT"]):
-            leech_dest = LD
+        elif "leech_dest" not in user_dict and config_dict["LEECH_DUMP_CHAT"]:
+            leech_dest = config_dict["LEECH_DUMP_CHAT"]
         else:
             leech_dest = "None"
         buttons.data_button("Leech Prefix", f"userset {user_id} leech_prefix")
         if user_dict.get("lprefix", False):
             lprefix = user_dict["lprefix"]
-        elif "lprefix" not in user_dict and (
-            LP := config_dict["LEECH_FILENAME_PREFIX"]
-        ):
-            lprefix = LP
+        elif "lprefix" not in user_dict and config_dict["LEECH_FILENAME_PREFIX"]:
+            lprefix = config_dict["LEECH_FILENAME_PREFIX"]
         else:
             lprefix = "None"
         if (
@@ -504,6 +508,14 @@ async def edit_user_settings(client, query):
         else:
             mixed_leech = "Disabled"
 
+        buttons.data_button("Thumbnail Layout", f"userset {user_id} tlayout")
+        if user_dict.get("thumb_layout", False):
+            thumb_layout = user_dict["thumb_layout"]
+        elif "thumb_layout" not in user_dict and config_dict["THUMBNAIL_LAYOUT"]:
+            thumb_layout = config_dict["THUMBNAIL_LAYOUT"]
+        else:
+            thumb_layout = "None"
+
         buttons.data_button("Back", f"userset {user_id} back")
         buttons.data_button("Close", f"userset {user_id} close")
         text = f"""<u>Leech Settings for {name}</u>
@@ -516,6 +528,7 @@ Leech Prefix is <code>{escape(lprefix)}</code>
 Leech Destination is <code>{leech_dest}</code>
 Leech by <b>{leech_method}</b> session
 Mixed Leech is <b>{mixed_leech}</b>
+Thumbnail Layout is <b>{thumb_layout}</b>
 """
         await edit_message(message, text, buttons.build_menu(2))
     elif data[2] == "rclone":
@@ -722,6 +735,26 @@ Check all yt-dlp api options from this <a href='https://github.com/yt-dlp/yt-dlp
         )
         pfunc = partial(set_option, pre_event=query, option="leech_dest")
         await event_handler(client, query, pfunc)
+    elif data[2] == "tlayout":
+        await query.answer()
+        buttons = ButtonMaker()
+        if (
+            user_dict.get("thumb_layout", False)
+            or "thumb_layout" not in user_dict
+            and config_dict["THUMBNAIL_LAYOUT"]
+        ):
+            buttons.data_button(
+                "Reset Thumbnail Layout", f"userset {user_id} thumb_layout"
+            )
+        buttons.data_button("Back", f"userset {user_id} leech")
+        buttons.data_button("Close", f"userset {user_id} close")
+        await edit_message(
+            message,
+            "Send thumbnail layout (widthxheight, 2x2, 3x3, 2x4, 4x4, ...). Timeout: 60 sec",
+            buttons.build_menu(1),
+        )
+        pfunc = partial(set_option, pre_event=query, option="thumb_layout")
+        await event_handler(client, query, pfunc)
     elif data[2] == "ex_ex":
         await query.answer()
         buttons = ButtonMaker()
@@ -751,15 +784,14 @@ Check all yt-dlp api options from this <a href='https://github.com/yt-dlp/yt-dlp
         buttons.data_button("Close", f"userset {user_id} close")
         emsg = r"""Word Subtitions. You can add pattern instead of normal text. Timeout: 60 sec
 NOTE: You must add \ before any character, those are the characters: \^$.|?*+()[]{}-
-Example-1: text : code : s|mirror : leech|tea :  : s|clone
-1. text will get replaced by code with sensitive case
+Example: script/code/s | mirror/leech | tea/ /s | clone | cpu/ | \[mltb\]/mltb | \\text\\/text/s
+1. script will get replaced by code with sensitive case
 2. mirror will get replaced by leech
-4. tea will get removed with sensitive case
+4. tea will get replaced by space with sensitive case
 5. clone will get removed
-Example-2: \(text\) | \[test\] : test | \\text\\ : text : s
-1. (text) will get removed
-2. [test] will get replaced by test
-3. \text\ will get replaced by text with sensitive case
+6. cpu will get replaced by space
+7. [mltb] will get replaced by mltb
+8. \text\ will get replaced by text with sensitive case
 """
         emsg += f"Your Current Value is {user_dict.get('name_sub') or 'not added yet!'}"
         await edit_message(
