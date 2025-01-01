@@ -7,7 +7,8 @@ from re import search as re_search, escape
 from time import time
 from aioshutil import rmtree
 
-from bot import LOGGER, subprocess_lock, DOWNLOAD_DIR
+from ... import LOGGER
+from ...core.config_manager import Config
 from .bot_utils import cmd_exec, sync_to_async
 from .files_utils import ARCH_EXT, get_mime_type
 
@@ -21,8 +22,14 @@ async def convert_video(listener, video_file, ext, retry=False):
             "-hide_banner",
             "-loglevel",
             "error",
+            "-progress",
+            "pipe:1",
             "-i",
             video_file,
+            "-map",
+            "0:v",
+            "-map",
+            "0:a",
             "-c:v",
             "libx264",
             "-c:a",
@@ -32,17 +39,19 @@ async def convert_video(listener, video_file, ext, retry=False):
             output,
         ]
         if ext == "mp4":
-            cmd[10:10] = ["-c:s", "mov_text"]
+            cmd[16:16] = ["-c:s", "mov_text"]
         elif ext == "mkv":
-            cmd[10:10] = ["-c:s", "ass"]
+            cmd[16:16] = ["-c:s", "ass"]
         else:
-            cmd[10:10] = ["-c:s", "copy"]
+            cmd[16:16] = ["-c:s", "copy"]
     else:
         cmd = [
             "ffmpeg",
             "-hide_banner",
             "-loglevel",
             "error",
+            "-progress",
+            "pipe:1",
             "-i",
             video_file,
             "-map",
@@ -53,12 +62,12 @@ async def convert_video(listener, video_file, ext, retry=False):
         ]
     if listener.is_cancelled:
         return False
-    async with subprocess_lock:
-        listener.subproc = await create_subprocess_exec(*cmd, stderr=PIPE)
-    _, stderr = await listener.subproc.communicate()
-    if listener.is_cancelled:
-        return False
-    code = listener.subproc.returncode
+    async with listener.subprocess_lock:
+        listener.subproc = await create_subprocess_exec(*cmd, stdout=PIPE, stderr=PIPE)
+    code = await listener.subproc.wait()
+    async with listener.subprocess_lock:
+        if listener.is_cancelled:
+            return False
     if code == 0:
         return output
     elif code == -9:
@@ -71,7 +80,7 @@ async def convert_video(listener, video_file, ext, retry=False):
             return await convert_video(listener, video_file, ext, True)
         else:
             try:
-                stderr = stderr.decode().strip()
+                stderr = (await listener.subproc.stderr.read()).decode().strip()
             except:
                 stderr = "Unable to decode the error!"
             LOGGER.error(
@@ -88,6 +97,8 @@ async def convert_audio(listener, audio_file, ext):
         "-hide_banner",
         "-loglevel",
         "error",
+        "-progress",
+        "pipe:1",
         "-i",
         audio_file,
         "-threads",
@@ -96,12 +107,12 @@ async def convert_audio(listener, audio_file, ext):
     ]
     if listener.is_cancelled:
         return False
-    async with subprocess_lock:
-        listener.subproc = await create_subprocess_exec(*cmd, stderr=PIPE)
-    _, stderr = await listener.subproc.communicate()
-    if listener.is_cancelled:
-        return False
-    code = listener.subproc.returncode
+    async with listener.subprocess_lock:
+        listener.subproc = await create_subprocess_exec(*cmd, stdout=PIPE, stderr=PIPE)
+    code = await listener.subproc.wait()
+    async with listener.subprocess_lock:
+        if listener.is_cancelled:
+            return False
     if code == 0:
         return output
     elif code == -9:
@@ -109,7 +120,7 @@ async def convert_audio(listener, audio_file, ext):
         return False
     else:
         try:
-            stderr = stderr.decode().strip()
+            stderr = (await listener.subproc.stderr.read()).decode().strip()
         except:
             stderr = "Unable to decode the error!"
         LOGGER.error(
@@ -123,7 +134,7 @@ async def convert_audio(listener, audio_file, ext):
 async def create_thumb(msg, _id=""):
     if not _id:
         _id = msg.id
-        path = f"{DOWNLOAD_DIR}Thumbnails"
+        path = f"{Config.DOWNLOAD_DIR}Thumbnails"
     else:
         path = "Thumbnails"
     await makedirs(path, exist_ok=True)
@@ -296,7 +307,7 @@ async def take_ss(video_file, ss_nb) -> bool:
 
 
 async def get_audio_thumbnail(audio_file):
-    output_dir = f"{DOWNLOAD_DIR}Thumbnails"
+    output_dir = f"{Config.DOWNLOAD_DIR}Thumbnails"
     await makedirs(output_dir, exist_ok=True)
     output = ospath.join(output_dir, f"{time()}.jpg")
     cmd = [
@@ -323,7 +334,7 @@ async def get_audio_thumbnail(audio_file):
 
 
 async def get_video_thumbnail(video_file, duration):
-    output_dir = f"{DOWNLOAD_DIR}Thumbnails"
+    output_dir = f"{Config.DOWNLOAD_DIR}Thumbnails"
     await makedirs(output_dir, exist_ok=True)
     output = ospath.join(output_dir, f"{time()}.jpg")
     if duration is None:
@@ -371,7 +382,7 @@ async def get_multiple_frames_thumbnail(video_file, layout, keep_screenshots):
     dirpath = await take_ss(video_file, ss_nb)
     if not dirpath:
         return None
-    output_dir = f"{DOWNLOAD_DIR}Thumbnails"
+    output_dir = f"{Config.DOWNLOAD_DIR}Thumbnails"
     await makedirs(output_dir, exist_ok=True)
     output = ospath.join(output_dir, f"{time()}.jpg")
     cmd = [
@@ -444,6 +455,8 @@ async def split_file(
                 "-hide_banner",
                 "-loglevel",
                 "error",
+                "-progress",
+                "pipe:1",
                 "-ss",
                 str(start_time),
                 "-i",
@@ -463,22 +476,25 @@ async def split_file(
                 out_path,
             ]
             if not multi_streams:
-                del cmd[10]
-                del cmd[10]
+                del cmd[12]
+                del cmd[12]
             if listener.is_cancelled:
                 return False
-            async with subprocess_lock:
-                listener.subproc = await create_subprocess_exec(*cmd, stderr=PIPE)
-            _, stderr = await listener.subproc.communicate()
-            if listener.is_cancelled:
-                return False
-            code = listener.subproc.returncode
+            async with listener.subprocess_lock:
+                listener.subproc = await create_subprocess_exec(
+                    *cmd, stdout=PIPE, stderr=PIPE
+                )
+            code = await listener.subproc.wait()
+            async with listener.subprocess_lock:
+                if listener.is_cancelled:
+                    return False
+                code = listener.subproc.returncode
             if code == -9:
                 listener.is_cancelled = True
                 return False
             elif code != 0:
                 try:
-                    stderr = stderr.decode().strip()
+                    stderr = (await listener.subproc.stderr.read()).decode().strip()
                 except:
                     stderr = "Unable to decode the error!"
                 try:
@@ -540,8 +556,9 @@ async def split_file(
             start_time += lpd - 3
             i += 1
     else:
+        listener.subsize = 0
         out_path = f"{dirpath}/{file_}."
-        async with subprocess_lock:
+        async with listener.subprocess_lock:
             if listener.is_cancelled:
                 return False
             listener.subproc = await create_subprocess_exec(
@@ -553,16 +570,16 @@ async def split_file(
                 out_path,
                 stderr=PIPE,
             )
-        _, stderr = await listener.subproc.communicate()
-        if listener.is_cancelled:
-            return False
-        code = listener.subproc.returncode
+        code = await listener.subproc.wait()
+        async with listener.subprocess_lock:
+            if listener.is_cancelled:
+                return False
         if code == -9:
             listener.is_cancelled = True
             return False
         elif code != 0:
             try:
-                stderr = stderr.decode().strip()
+                stderr = (await listener.subproc.stderr.read()).decode().strip()
             except:
                 stderr = "Unable to decode the error!"
             LOGGER.error(f"{stderr}. Split Document: {path}")
@@ -602,6 +619,8 @@ async def create_sample_video(listener, video_file, sample_duration, part_durati
         "-hide_banner",
         "-loglevel",
         "error",
+        "-progress",
+        "pipe:1",
         "-i",
         video_file,
         "-filter_complex",
@@ -621,12 +640,12 @@ async def create_sample_video(listener, video_file, sample_duration, part_durati
 
     if listener.is_cancelled:
         return False
-    async with subprocess_lock:
-        listener.subproc = await create_subprocess_exec(*cmd, stderr=PIPE)
-    _, stderr = await listener.subproc.communicate()
-    if listener.is_cancelled:
-        return False
-    code = listener.subproc.returncode
+    async with listener.subprocess_lock:
+        listener.subproc = await create_subprocess_exec(*cmd, stdout=PIPE, stderr=PIPE)
+    code = await listener.subproc.wait()
+    async with listener.subprocess_lock:
+        if listener.is_cancelled:
+            return False
     if code == -9:
         listener.is_cancelled = True
         return False
@@ -634,7 +653,7 @@ async def create_sample_video(listener, video_file, sample_duration, part_durati
         return output_file
     else:
         try:
-            stderr = stderr.decode().strip()
+            stderr = (await listener.subproc.stderr.read()).decode().strip()
         except Exception:
             stderr = "Unable to decode the error!"
         LOGGER.error(
@@ -754,12 +773,12 @@ async def run_ffmpeg_cmd(listener, ffmpeg, path):
     ffmpeg[-1] = output
     if listener.is_cancelled:
         return False
-    async with subprocess_lock:
-        listener.subproc = await create_subprocess_exec(*ffmpeg, stderr=PIPE)
-    _, stderr = await listener.subproc.communicate()
-    if listener.is_cancelled:
-        return False
-    code = listener.subproc.returncode
+    async with listener.subprocess_lock:
+        listener.subproc = await create_subprocess_exec(*ffmpeg, stdout=PIPE, stderr=PIPE)
+    code = await listener.subproc.wait()
+    async with listener.subprocess_lock:
+        if listener.is_cancelled:
+            return False
     if code == 0:
         return output
     elif code == -9:
@@ -767,7 +786,7 @@ async def run_ffmpeg_cmd(listener, ffmpeg, path):
         return False
     else:
         try:
-            stderr = stderr.decode().strip()
+            stderr = (await listener.subproc.stderr.read()).decode().strip()
         except:
             stderr = "Unable to decode the error!"
         LOGGER.error(

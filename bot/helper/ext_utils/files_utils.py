@@ -7,7 +7,8 @@ from shutil import rmtree
 from subprocess import run as srun
 from sys import exit
 
-from bot import aria2, LOGGER, DOWNLOAD_DIR, qbittorrent_client
+from ... import aria2, LOGGER, qbittorrent_client
+from ...core.config_manager import Config
 from .bot_utils import sync_to_async, cmd_exec
 from .exceptions import NotSupportedExtractionArchive
 
@@ -96,17 +97,24 @@ def clean_all():
     qbittorrent_client.torrents_delete(torrent_hashes="all")
     try:
         LOGGER.info("Cleaning Download Directory")
-        rmtree(DOWNLOAD_DIR, ignore_errors=True)
+        rmtree(Config.DOWNLOAD_DIR, ignore_errors=True)
     except:
         pass
-    makedirs(DOWNLOAD_DIR, exist_ok=True)
+    makedirs(Config.DOWNLOAD_DIR, exist_ok=True)
 
 
 def exit_clean_up(signal, frame):
     try:
         LOGGER.info("Please wait, while we clean up and stop the running downloads")
         clean_all()
-        srun(["pkill", "-9", "-f", "gunicorn|aria2c|qbittorrent-nox|ffmpeg|java"])
+        srun(
+            [
+                "pkill",
+                "-9",
+                "-f",
+                "gunicorn|aria2c|qbittorrent-nox|ffmpeg|java|sabnzbdplus|7z",
+            ]
+        )
         exit(0)
     except KeyboardInterrupt:
         LOGGER.warning("Force Exiting before the cleanup finishes!")

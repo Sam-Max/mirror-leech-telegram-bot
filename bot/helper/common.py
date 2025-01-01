@@ -1,5 +1,5 @@
 from aiofiles.os import path as aiopath, remove, makedirs
-from asyncio import sleep, create_subprocess_exec, gather
+from asyncio import sleep, create_subprocess_exec, gather, Lock
 from asyncio.subprocess import PIPE
 from os import walk, path as ospath
 from secrets import token_urlsafe
@@ -7,22 +7,18 @@ from aioshutil import move, copy2
 from pyrogram.enums import ChatAction
 from re import sub, I
 
-from bot import (
-    DOWNLOAD_DIR,
-    MAX_SPLIT_SIZE,
-    config_dict,
+from .. import (
     user_data,
-    IS_PREMIUM_USER,
-    user,
     multi_tags,
     LOGGER,
     task_dict_lock,
     task_dict,
-    global_extension_filter,
+    extension_filter,
     cpu_eater_lock,
-    subprocess_lock,
     intervals,
 )
+from ..core.config_manager import Config
+from ..core.mltb_client import TgClient
 from .ext_utils.bot_utils import new_task, sync_to_async, get_size_bytes
 from .ext_utils.bulk_links import extract_bulk_links
 from .ext_utils.exceptions import NotSupportedExtractionArchive
@@ -70,12 +66,13 @@ class TaskConfig:
         self.user = self.message.from_user or self.message.sender_chat
         self.user_id = self.user.id
         self.user_dict = user_data.get(self.user_id, {})
-        self.dir = f"{DOWNLOAD_DIR}{self.mid}"
+        self.dir = f"{Config.DOWNLOAD_DIR}{self.mid}"
         self.link = ""
         self.up_dest = ""
         self.rc_flags = ""
         self.tag = ""
         self.name = ""
+        self.subname = ""
         self.new_dir = ""
         self.name_sub = ""
         self.thumbnail_layout = ""
@@ -84,6 +81,7 @@ class TaskConfig:
         self.max_split_size = 0
         self.multi = 0
         self.size = 0
+        self.subsize = 0
         self.is_leech = False
         self.is_qbit = False
         self.is_nzb = False
@@ -113,9 +111,11 @@ class TaskConfig:
         self.is_torrent = False
         self.as_med = False
         self.as_doc = False
+        self.is_file = False
         self.ffmpeg_cmds = None
         self.chat_thread_id = None
         self.subproc = None
+        self.subprocess_lock = Lock()
         self.thumb = None
         self.extension_filter = []
         self.is_super_chat = self.message.chat.type.name in ["SUPERGROUP", "CHANNEL"]
@@ -125,7 +125,7 @@ class TaskConfig:
             return f"tokens/{self.user_id}.pickle"
         elif (
             dest.startswith("sa:")
-            or config_dict["USE_SERVICE_ACCOUNTS"]
+            or Config.USE_SERVICE_ACCOUNTS
             and not dest.startswith("tp:")
         ):
             return "accounts"
@@ -160,17 +160,13 @@ class TaskConfig:
         self.name_sub = (
             self.name_sub
             or self.user_dict.get("name_sub", False)
-            or (
-                config_dict["NAME_SUBSTITUTE"]
-                if "name_sub" not in self.user_dict
-                else ""
-            )
+            or (Config.NAME_SUBSTITUTE if "name_sub" not in self.user_dict else "")
         )
         if self.name_sub:
             self.name_sub = [x.split("/") for x in self.name_sub.split(" | ")]
             self.seed = False
         self.extension_filter = self.user_dict.get("excluded_extensions") or (
-            global_extension_filter
+            extension_filter
             if "excluded_extensions" not in self.user_dict
             else ["aria2", "!qB"]
         )
@@ -199,9 +195,9 @@ class TaskConfig:
                 if not is_gdrive_id(self.link):
                     raise ValueError(self.link)
 
-        self.user_transmission = IS_PREMIUM_USER and (
+        self.user_transmission = TgClient.IS_PREMIUM_USER and (
             self.user_dict.get("user_transmission")
-            or config_dict["USER_TRANSMISSION"]
+            or Config.USER_TRANSMISSION
             and "user_transmission" not in self.user_dict
         )
 
@@ -212,15 +208,14 @@ class TaskConfig:
         ):
             self.up_dest = self.user_dict["upload_paths"][self.up_dest]
 
-        self.ffmpeg_cmds = (
-            self.ffmpeg_cmds
-            or self.user_dict.get("ffmpeg_cmds", None)
-            or (
-                config_dict["FFMPEG_CMDS"]
-                if "ffmpeg_cmds" not in self.user_dict
-                else None
-            )
-        )
+        if self.ffmpeg_cmds and not isinstance(self.ffmpeg_cmds, list):
+            if self.user_dict.get("ffmpeg_cmds", None):
+                self.ffmpeg_cmds = self.user_dict["ffmpeg_cmds"].get(self.ffmpeg_cmds, None)
+            elif "ffmpeg_cmds" not in self.user_dict and Config.FFMPEG_CMDS:
+                self.ffmpeg_cmds = Config.FFMPEG_CMDS.get(self.ffmpeg_cmds, None)
+            else:
+                self.ffmpeg_cmds = None
+
         if self.ffmpeg_cmds:
             self.seed = False
 
@@ -228,20 +223,15 @@ class TaskConfig:
             self.stop_duplicate = (
                 self.user_dict.get("stop_duplicate")
                 or "stop_duplicate" not in self.user_dict
-                and config_dict["STOP_DUPLICATE"]
+                and Config.STOP_DUPLICATE
             )
             default_upload = (
-                self.user_dict.get("default_upload", "")
-                or config_dict["DEFAULT_UPLOAD"]
+                self.user_dict.get("default_upload", "") or Config.DEFAULT_UPLOAD
             )
             if (not self.up_dest and default_upload == "rc") or self.up_dest == "rc":
-                self.up_dest = (
-                    self.user_dict.get("rclone_path") or config_dict["RCLONE_PATH"]
-                )
+                self.up_dest = self.user_dict.get("rclone_path") or Config.RCLONE_PATH
             elif (not self.up_dest and default_upload == "gd") or self.up_dest == "gd":
-                self.up_dest = (
-                    self.user_dict.get("gdrive_id") or config_dict["GDRIVE_ID"]
-                )
+                self.up_dest = self.user_dict.get("gdrive_id") or Config.GDRIVE_ID
             if not self.up_dest:
                 raise ValueError("No Upload Destination!")
             if is_gdrive_id(self.up_dest):
@@ -301,11 +291,11 @@ class TaskConfig:
             self.up_dest = (
                 self.up_dest
                 or self.user_dict.get("leech_dest")
-                or config_dict["LEECH_DUMP_CHAT"]
+                or Config.LEECH_DUMP_CHAT
             )
-            self.mixed_leech = IS_PREMIUM_USER and (
+            self.mixed_leech = TgClient.IS_PREMIUM_USER and (
                 self.user_dict.get("mixed_leech")
-                or config_dict["MIXED_LEECH"]
+                or Config.MIXED_LEECH
                 and "mixed_leech" not in self.user_dict
             )
             if self.up_dest:
@@ -316,9 +306,9 @@ class TaskConfig:
                         self.mixed_leech = False
                     elif self.up_dest.startswith("u:"):
                         self.up_dest = self.up_dest.replace("u:", "", 1)
-                        self.user_transmission = IS_PREMIUM_USER
+                        self.user_transmission = TgClient.IS_PREMIUM_USER
                     elif self.up_dest.startswith("m:"):
-                        self.user_transmission = IS_PREMIUM_USER
+                        self.user_transmission = TgClient.IS_PREMIUM_USER
                         self.mixed_leech = self.user_transmission
                     if "|" in self.up_dest:
                         self.up_dest, self.chat_thread_id = list(
@@ -333,32 +323,58 @@ class TaskConfig:
                         self.up_dest = self.user_id
 
                 if self.user_transmission:
-                    chat = await user.get_chat(self.up_dest)
-                    uploader_id = user.me.id
-                else:
-                    chat = await self.client.get_chat(self.up_dest)
-                    uploader_id = self.client.me.id
-
-                if chat.type.name in ["SUPERGROUP", "CHANNEL"]:
-                    member = await chat.get_member(uploader_id)
-                    if (
-                        not member.privileges.can_manage_chat
-                        or not member.privileges.can_delete_messages
-                    ):
-                        raise ValueError(
-                            "You don't have enough privileges in this chat!"
-                        )
-                elif self.user_transmission:
-                    raise ValueError(
-                        "Custom Leech Destination only allowed for super-group or channel when UserTransmission enalbed!\nDisable UserTransmission so bot can send files to user!"
-                    )
-                else:
                     try:
-                        await self.client.send_chat_action(
-                            self.up_dest, ChatAction.TYPING
-                        )
+                        chat = await TgClient.user.get_chat(self.up_dest)
                     except:
-                        raise ValueError("Start the bot and try again!")
+                        chat = None
+                    if chat is None:
+                        self.user_transmission = False
+                        self.mixed_leech = False
+                    else:
+                        uploader_id = TgClient.user.me.id
+                        if chat.type.name not in ["SUPERGROUP", "CHANNEL", "GROUP"]:
+                            self.user_transmission = False
+                            self.mixed_leech = False
+                        else:
+                            member = await chat.get_member(uploader_id)
+                            if (
+                                not member.privileges.can_manage_chat
+                                or not member.privileges.can_delete_messages
+                            ):
+                                self.user_transmission = False
+                                self.mixed_leech = False
+
+                if not self.user_transmission or self.mixed_leech:
+                    try:
+                        chat = await self.client.get_chat(self.up_dest)
+                    except:
+                        chat = None
+                    if chat is None:
+                        if self.user_transmission:
+                            self.mixed_leech = False
+                        else:
+                            raise ValueError("Chat not found!")
+                    else:
+                        uploader_id = self.client.me.id
+                        if chat.type.name in ["SUPERGROUP", "CHANNEL", "GROUP"]:
+                            member = await chat.get_member(uploader_id)
+                            if (
+                                not member.privileges.can_manage_chat
+                                or not member.privileges.can_delete_messages
+                            ):
+                                if not self.user_transmission:
+                                    raise ValueError(
+                                        "You don't have enough privileges in this chat!"
+                                    )
+                                else:
+                                    self.mixed_leech = False
+                        else:
+                            try:
+                                await self.client.send_chat_action(
+                                    self.up_dest, ChatAction.TYPING
+                                )
+                            except:
+                                raise ValueError("Start the bot and try again!")
             elif (
                 self.user_transmission or self.mixed_leech
             ) and not self.is_super_chat:
@@ -372,15 +388,15 @@ class TaskConfig:
             self.split_size = (
                 self.split_size
                 or self.user_dict.get("split_size")
-                or config_dict["LEECH_SPLIT_SIZE"]
+                or Config.LEECH_SPLIT_SIZE
             )
             self.equal_splits = (
                 self.user_dict.get("equal_splits")
-                or config_dict["EQUAL_SPLITS"]
+                or Config.EQUAL_SPLITS
                 and "equal_splits" not in self.user_dict
             )
             self.max_split_size = (
-                MAX_SPLIT_SIZE if self.user_transmission else 2097152000
+                TgClient.MAX_SPLIT_SIZE if self.user_transmission else 2097152000
             )
             self.split_size = min(self.split_size, self.max_split_size)
 
@@ -390,7 +406,7 @@ class TaskConfig:
                     if self.as_med
                     else (
                         self.user_dict.get("as_doc", False)
-                        or config_dict["AS_DOCUMENT"]
+                        or Config.AS_DOCUMENT
                         and "as_doc" not in self.user_dict
                     )
                 )
@@ -399,13 +415,13 @@ class TaskConfig:
                 self.thumbnail_layout
                 or self.user_dict.get("thumb_layout", False)
                 or (
-                    config_dict["THUMBNAIL_LAYOUT"]
+                    Config.THUMBNAIL_LAYOUT
                     if "thumb_layout" not in self.user_dict
                     else ""
                 )
             )
 
-            if is_telegram_link(self.thumb):
+            if self.thumb != "none" and is_telegram_link(self.thumb):
                 msg = (await get_tg_link_message(self.thumb))[0]
                 self.thumb = (
                     await create_thumb(msg) if msg.photo or msg.document else ""
@@ -548,17 +564,16 @@ class TaskConfig:
                         cmd = ["unzstd", f_path, "-o", out_path]
                         if self.is_cancelled:
                             return ""
-                        async with subprocess_lock:
+                        async with self.subprocess_lock:
                             self.subproc = await create_subprocess_exec(
                                 *cmd, stderr=PIPE
                             )
-                        _, stderr = await self.subproc.communicate()
+                        code = await self.subproc.wait()
                         if self.is_cancelled:
                             return ""
-                        code = self.subproc.returncode
                         if code != 0:
                             try:
-                                stderr = stderr.decode().strip()
+                                stderr = (await self.subproc.stderr.read()).decode().strip()
                             except:
                                 stderr = "Unable to decode the error!"
                             LOGGER.error(
@@ -566,26 +581,27 @@ class TaskConfig:
                             )
                         elif not self.seed:
                             await remove(f_path)
+                    self.subproc = None
             return
         elif dl_path.endswith(".zst"):
             out_path = get_base_name(dl_path)
             cmd = ["unzstd", dl_path, "-o", out_path]
             if self.is_cancelled:
                 return ""
-            async with subprocess_lock:
+            async with self.subprocess_lock:
                 self.subproc = await create_subprocess_exec(*cmd, stderr=PIPE)
-            _, stderr = await self.subproc.communicate()
+            code = await self.subproc.wait()
             if self.is_cancelled:
                 return ""
-            code = self.subproc.returncode
             if code != 0:
                 try:
-                    stderr = stderr.decode().strip()
+                    stderr = (await self.subproc.stderr.read()).decode().strip()
                 except:
                     stderr = "Unable to decode the error!"
                 LOGGER.error(f"{stderr}. Unable to extract zst file!. Path: {dl_path}")
             elif not self.seed:
                 await remove(dl_path)
+            self.subproc = None
             return out_path
         return dl_path
 
@@ -595,7 +611,7 @@ class TaskConfig:
             LOGGER.info(f"Extracting: {self.name}")
             async with task_dict_lock:
                 task_dict[self.mid] = SevenZStatus(self, gid, "Extract")
-            if await aiopath.isdir(dl_path):
+            if not self.is_file:
                 if self.seed:
                     self.new_dir = f"{self.dir}10000"
                     up_path = f"{self.new_dir}/{self.name}"
@@ -626,22 +642,25 @@ class TaskConfig:
                                 f"-o{t_path}",
                                 "-aot",
                                 "-xr!@PaxHeader",
+                                "-bsp1",
+                                "-bse1",
+                                "-bb3",
                             ]
                             if not pswd:
                                 del cmd[2]
                             if self.is_cancelled:
                                 return ""
-                            async with subprocess_lock:
+                            self.subname = file_
+                            async with self.subprocess_lock:
                                 self.subproc = await create_subprocess_exec(
-                                    *cmd, stderr=PIPE
+                                    *cmd, stdout=PIPE, stderr=PIPE
                                 )
-                            _, stderr = await self.subproc.communicate()
+                            code = await self.subproc.wait()
                             if self.is_cancelled:
                                 return ""
-                            code = self.subproc.returncode
                             if code != 0:
                                 try:
-                                    stderr = stderr.decode().strip()
+                                    stderr = (await self.subproc.stderr.read()).decode().strip()
                                 except:
                                     stderr = "Unable to decode the error!"
                                 LOGGER.error(
@@ -659,6 +678,7 @@ class TaskConfig:
                                     await remove(del_path)
                                 except:
                                     self.is_cancelled = True
+                    self.subproc = None
                 return up_path
             else:
                 dl_path = await self.decompress_zst(dl_path)
@@ -674,17 +694,21 @@ class TaskConfig:
                     f"-o{up_path}",
                     "-aot",
                     "-xr!@PaxHeader",
+                    "-bsp1",
+                    "-bse1",
+                    "-bb3",
                 ]
                 if not pswd:
                     del cmd[2]
                 if self.is_cancelled:
                     return ""
-                async with subprocess_lock:
-                    self.subproc = await create_subprocess_exec(*cmd, stderr=PIPE)
-                _, stderr = await self.subproc.communicate()
+                async with self.subprocess_lock:
+                    self.subproc = await create_subprocess_exec(
+                        *cmd, stdout=PIPE, stderr=PIPE
+                    )
+                code = await self.subproc.wait()
                 if self.is_cancelled:
                     return ""
-                code = self.subproc.returncode
                 if code == -9:
                     self.is_cancelled = True
                     return ""
@@ -695,22 +719,25 @@ class TaskConfig:
                             await remove(dl_path)
                         except:
                             self.is_cancelled = True
+                    self.subproc = None
                     return up_path
                 else:
                     try:
-                        stderr = stderr.decode().strip()
+                        stderr = (await self.subproc.stderr.read()).decode().strip()
                     except:
                         stderr = "Unable to decode the error!"
                     LOGGER.error(
                         f"{stderr}. Unable to extract archive! Uploading anyway. Path: {dl_path}"
                     )
                     self.new_dir = ""
+                    self.subproc = None
                     return dl_path
         except NotSupportedExtractionArchive:
             LOGGER.info(
                 f"Not any valid archive, uploading file as it is. Path: {dl_path}"
             )
             self.new_dir = ""
+            self.subproc = None
             return dl_path
 
     async def proceed_compress(self, dl_path, gid, o_files, ft_delete):
@@ -734,12 +761,15 @@ class TaskConfig:
             "7z",
             f"-v{split_size}b",
             "a",
-            "-mx=0",
+            "-mx=9",
             f"-p{pswd}",
             up_path,
             dl_path,
+            "-bsp1",
+            "-bse1",
+            "-bb3",
         ]
-        if await aiopath.isdir(dl_path):
+        if not self.is_file:
             cmd.extend(f"-xr!*.{ext}" for ext in self.extension_filter)
             if o_files:
                 for f in o_files:
@@ -759,12 +789,11 @@ class TaskConfig:
             LOGGER.info(f"Zip: orig_path: {dl_path}, zip_path: {up_path}")
         if self.is_cancelled:
             return ""
-        async with subprocess_lock:
-            self.subproc = await create_subprocess_exec(*cmd, stderr=PIPE)
-        _, stderr = await self.subproc.communicate()
+        async with self.subprocess_lock:
+            self.subproc = await create_subprocess_exec(*cmd, stdout=PIPE, stderr=PIPE)
+        code = await self.subproc.wait()
         if self.is_cancelled:
             return ""
-        code = self.subproc.returncode
         if code == -9:
             self.is_cancelled = True
             return ""
@@ -778,16 +807,18 @@ class TaskConfig:
                     except:
                         pass
             ft_delete.clear()
+            self.subproc = None
             return up_path
         else:
             await clean_target(self.new_dir)
             if not delete:
                 self.new_dir = ""
             try:
-                stderr = stderr.decode().strip()
+                stderr = (await self.subproc.stderr.read()).decode().strip()
             except:
                 stderr = "Unable to decode the error!"
             LOGGER.error(f"{stderr}. Unable to zip this path: {dl_path}")
+            self.subproc = None
             return dl_path
 
     async def proceed_split(self, up_dir, m_size, o_files, gid):
@@ -804,9 +835,15 @@ class TaskConfig:
                         async with task_dict_lock:
                             task_dict[self.mid] = FFmpegStatus(self, gid, "Split")
                         LOGGER.info(f"Splitting: {self.name}")
+                    if self.is_file:
+                        self.subsize = self.size
+                    else:
+                        self.subsize = f_size
+                        self.subname = file_
                     res = await split_file(
                         f_path, f_size, dirpath, file_, self.split_size, self
                     )
+                    self.subproc = None
                     if self.is_cancelled:
                         return
                     if not res:
@@ -844,14 +881,16 @@ class TaskConfig:
             task_dict[self.mid] = FFmpegStatus(self, gid, "Sample Video")
 
         checked = False
-        if await aiopath.isfile(dl_path):
+        if self.is_file:
             if (await get_document_type(dl_path))[0]:
                 checked = True
                 async with cpu_eater_lock:
                     LOGGER.info(f"Creating Sample video: {self.name}")
+                    self.subsize = self.size
                     res = await create_sample_video(
                         self, dl_path, sample_duration, part_duration
                     )
+                self.subproc = None
                 if res:
                     new_folder = ospath.splitext(dl_path)[0]
                     name = dl_path.rsplit("/", 1)[1]
@@ -887,9 +926,12 @@ class TaskConfig:
                             if checked:
                                 cpu_eater_lock.release()
                             return ""
+                        self.subsize = await aiopath.getsize(f_path)
+                        self.subname = file_
                         res = await create_sample_video(
                             self, f_path, sample_duration, part_duration
                         )
+                        self.subproc = None
                         if res:
                             ft_delete.append(res)
             if checked:
@@ -959,7 +1001,13 @@ class TaskConfig:
                     LOGGER.info(f"Converting: {self.name}")
                 else:
                     LOGGER.info(f"Converting: {m_path}")
+                if self.is_file:
+                    self.subsize = self.size
+                else:
+                    self.subsize = await aiopath.getsize(m_path)
+                    self.subname = m_path.rsplit("/", 1)[-1]
                 res = await convert_video(self, m_path, vext)
+                self.subproc = None
                 return "" if self.is_cancelled else res
             elif (
                 is_audio
@@ -982,12 +1030,18 @@ class TaskConfig:
                     LOGGER.info(f"Converting: {self.name}")
                 else:
                     LOGGER.info(f"Converting: {m_path}")
+                if self.is_file:
+                    self.subsize = self.size
+                else:
+                    self.subsize = await aiopath.getsize(m_path)
+                    self.subname = m_path.rsplit("/", 1)[-1]
                 res = await convert_audio(self, m_path, aext)
+                self.subproc = None
                 return "" if self.is_cancelled else res
             else:
                 return ""
 
-        if await aiopath.isfile(dl_path):
+        if self.is_file:
             output_file = await proceed_convert(dl_path)
             if checked:
                 cpu_eater_lock.release()
@@ -1030,7 +1084,7 @@ class TaskConfig:
 
     async def generate_screenshots(self, dl_path):
         ss_nb = int(self.screen_shots) if isinstance(self.screen_shots, str) else 10
-        if await aiopath.isfile(dl_path):
+        if self.is_file:
             if (await get_document_type(dl_path))[0]:
                 LOGGER.info(f"Creating Screenshot for: {dl_path}")
                 res = await take_ss(dl_path, ss_nb)
@@ -1062,7 +1116,7 @@ class TaskConfig:
         return dl_path
 
     async def substitute(self, dl_path):
-        if await aiopath.isfile(dl_path):
+        if self.is_file:
             up_dir, name = dl_path.rsplit("/", 1)
             for substitution in self.name_sub:
                 sen = False
@@ -1124,12 +1178,18 @@ class TaskConfig:
 
     async def proceed_ffmpeg(self, dl_path, gid):
         checked = False
-        for ffmpeg_cmd in self.ffmpeg_cmds:
+        cmds = [
+            [part.strip() for part in item.split() if part.strip()]
+            for item in self.ffmpeg_cmds
+        ]
+        for ffmpeg_cmd in cmds:
             cmd = [
                 "ffmpeg",
                 "-hide_banner",
                 "-loglevel",
                 "error",
+                "-progress",
+                "pipe:1",
             ] + ffmpeg_cmd
             if "-del" in cmd:
                 cmd.remove("-del")
@@ -1146,7 +1206,7 @@ class TaskConfig:
                 ext = "all"
             else:
                 ext = ospath.splitext(input_file)[-1]
-            if await aiopath.isfile(dl_path):
+            if self.is_file:
                 is_video, is_audio, _ = await get_document_type(dl_path)
                 if not is_video and not is_audio:
                     break
@@ -1169,9 +1229,17 @@ class TaskConfig:
                     await cpu_eater_lock.acquire()
                 LOGGER.info(f"Running ffmpeg cmd for: {file_path}")
                 cmd[index + 1] = file_path
+                self.subsize = self.size
                 res = await run_ffmpeg_cmd(self, cmd, file_path)
+                self.subproc = None
                 if res and delete_files:
                     await remove(file_path)
+                    directory = ospath.dirname(res)
+                    file_name = ospath.basename(res)
+                    if file_name.startswith("ffmpeg."):
+                        newname = file_name.replace("ffmpeg.", "")
+                        newres = ospath.join(directory, newname)
+                        await move(res, newres)
             else:
                 for dirpath, _, files in await sync_to_async(
                     walk, dl_path, topdown=False
@@ -1197,9 +1265,18 @@ class TaskConfig:
                                 task_dict[self.mid] = FFmpegStatus(self, gid, "FFmpeg")
                             await cpu_eater_lock.acquire()
                         LOGGER.info(f"Running ffmpeg cmd for: {f_path}")
+                        self.subsize = await aiopath.getsize(f_path)
+                        self.subname = file_
                         res = await run_ffmpeg_cmd(self, cmd, f_path)
+                        self.subproc = None
                         if res and delete_files:
                             await remove(f_path)
+                            directory = ospath.dirname(res)
+                            file_name = ospath.basename(res)
+                            if file_name.startswith("ffmpeg."):
+                                newname = file_name.replace("ffmpeg.", "")
+                                newres = ospath.join(directory, newname)
+                                await move(res, newres)
         if checked:
             cpu_eater_lock.release()
         return dl_path

@@ -6,7 +6,7 @@ from natsort import natsorted
 from os import walk, path as ospath
 from time import time
 from re import match as re_match, sub as re_sub
-from pyrogram.errors import FloodWait, RPCError, FloodPremiumWait
+from pyrogram.errors import FloodWait, RPCError, FloodPremiumWait, BadRequest
 from aiofiles.os import (
     remove,
     path as aiopath,
@@ -26,7 +26,8 @@ from tenacity import (
     RetryError,
 )
 
-from bot import config_dict, user
+from ...core.config_manager import Config
+from ...core.mltb_client import TgClient
 from ..ext_utils.bot_utils import sync_to_async
 from ..ext_utils.files_utils import clean_unwanted, is_archive, get_base_name
 from ..telegram_helper.message_utils import delete_message
@@ -61,11 +62,12 @@ class TelegramUploader:
         self._is_private = False
         self._sent_msg = None
         self._user_session = self._listener.user_transmission
+        self._error = ""
 
     async def _upload_progress(self, current, _):
         if self._listener.is_cancelled:
             if self._user_session:
-                user.stop_transmission()
+                TgClient.user.stop_transmission()
             else:
                 self._listener.client.stop_transmission()
         chunk_size = current - self._last_uploaded
@@ -74,16 +76,16 @@ class TelegramUploader:
 
     async def _user_settings(self):
         self._media_group = self._listener.user_dict.get("media_group") or (
-            config_dict["MEDIA_GROUP"]
+            Config.MEDIA_GROUP
             if "media_group" not in self._listener.user_dict
             else False
         )
         self._lprefix = self._listener.user_dict.get("lprefix") or (
-            config_dict["LEECH_FILENAME_PREFIX"]
+            Config.LEECH_FILENAME_PREFIX
             if "lprefix" not in self._listener.user_dict
             else ""
         )
-        if not await aiopath.exists(self._thumb):
+        if self._thumb != "none" and not await aiopath.exists(self._thumb):
             self._thumb = None
 
     async def _msg_to_reply(self):
@@ -95,7 +97,7 @@ class TelegramUploader:
             )
             try:
                 if self._user_session:
-                    self._sent_msg = await user.send_message(
+                    self._sent_msg = await TgClient.user.send_message(
                         chat_id=self._listener.up_dest,
                         text=msg,
                         disable_web_page_preview=True,
@@ -115,11 +117,11 @@ class TelegramUploader:
                 await self._listener.on_upload_error(str(e))
                 return False
         elif self._user_session:
-            self._sent_msg = await user.get_messages(
+            self._sent_msg = await TgClient.user.get_messages(
                 chat_id=self._listener.message.chat.id, message_ids=self._listener.mid
             )
             if self._sent_msg is None:
-                self._sent_msg = await user.send_message(
+                self._sent_msg = await TgClient.user.send_message(
                     chat_id=self._listener.message.chat.id,
                     text="Deleted Cmd Message! Don't delete the cmd message again!",
                     disable_web_page_preview=True,
@@ -217,7 +219,7 @@ class TelegramUploader:
                     chat_id=msg[0], message_ids=msg[1]
                 )
             else:
-                msgs[index] = await user.get_messages(
+                msgs[index] = await TgClient.user.get_messages(
                     chat_id=msg[0], message_ids=msg[1]
                 )
         msgs_list = await msgs[0].reply_to_message.reply_media_group(
@@ -249,7 +251,11 @@ class TelegramUploader:
                 continue
             for file_ in natsorted(files):
                 delete_file = False
+                self._error = ""
                 self._up_path = f_path = ospath.join(dirpath, file_)
+                if not ospath.exists(self._up_path):
+                    LOGGER.error(f"{self._up_path} not exists! Continue uploading!")
+                    continue
                 if self._up_path in ft_delete:
                     delete_file = True
                 if self._up_path in o_files:
@@ -280,10 +286,10 @@ class TelegramUploader:
                                 for subkey, msgs in list(value.items()):
                                     if len(msgs) > 1:
                                         await self._send_media_group(subkey, key, msgs)
-                    if self._listener.mixed_leech:
+                    if self._listener.mixed_leech and self._listener.user_transmission:
                         self._user_session = f_size > 2097152000
                         if self._user_session:
-                            self._sent_msg = await user.get_messages(
+                            self._sent_msg = await TgClient.user.get_messages(
                                 chat_id=self._sent_msg.chat.id,
                                 message_ids=self._sent_msg.id,
                             )
@@ -311,6 +317,7 @@ class TelegramUploader:
                         )
                         err = err.last_attempt.exception()
                     LOGGER.error(f"{err}. Path: {self._up_path}")
+                    self._error = str(err)
                     self._corrupted += 1
                     if self._listener.is_cancelled:
                         return
@@ -345,9 +352,7 @@ class TelegramUploader:
             )
             return
         if self._total_files <= self._corrupted:
-            await self._listener.on_upload_error(
-                "Files Corrupted or unable to upload. Check logs!"
-            )
+            await self._listener.on_upload_error(f"Files Corrupted or unable to upload. {self._error or 'Check logs!'}")
             return
         LOGGER.info(f"Leech Completed: {self._listener.name}")
         await self._listener.on_upload_complete(
@@ -360,7 +365,7 @@ class TelegramUploader:
         retry=retry_if_exception_type(Exception),
     )
     async def _upload_file(self, cap_mono, file, o_path, force_document=False):
-        if self._thumb is not None and not await aiopath.exists(self._thumb):
+        if self._thumb is not None and not await aiopath.exists(self._thumb) and self._thumb != "none":
             self._thumb = None
         thumb = self._thumb
         self._is_corrupted = False
@@ -386,6 +391,8 @@ class TelegramUploader:
 
                 if self._listener.is_cancelled:
                     return
+                if thumb == "none":
+                    thumb = None
                 self._sent_msg = await self._sent_msg.reply_document(
                     document=self._up_path,
                     quote=True,
@@ -406,7 +413,7 @@ class TelegramUploader:
                     )
                 if thumb is None:
                     thumb = await get_video_thumbnail(self._up_path, duration)
-                if thumb is not None:
+                if thumb is not None and thumb != "none":
                     with Image.open(thumb) as img:
                         width, height = img.size
                 else:
@@ -414,6 +421,8 @@ class TelegramUploader:
                     height = 320
                 if self._listener.is_cancelled:
                     return
+                if thumb == "none":
+                    thumb = None
                 self._sent_msg = await self._sent_msg.reply_video(
                     video=self._up_path,
                     quote=True,
@@ -431,6 +440,8 @@ class TelegramUploader:
                 duration, artist, title = await get_media_info(self._up_path)
                 if self._listener.is_cancelled:
                     return
+                if thumb == "none":
+                    thumb = None
                 self._sent_msg = await self._sent_msg.reply_audio(
                     audio=self._up_path,
                     quote=True,
@@ -501,7 +512,7 @@ class TelegramUploader:
                 await remove(thumb)
             err_type = "RPCError: " if isinstance(err, RPCError) else ""
             LOGGER.error(f"{err_type}{err}. Path: {self._up_path}")
-            if "Telegram says: [400" in str(err) and key != "documents":
+            if isinstance(err, BadRequest) and key != "documents":
                 LOGGER.error(f"Retrying As Document. Path: {self._up_path}")
                 return await self._upload_file(cap_mono, file, o_path, True)
             raise err

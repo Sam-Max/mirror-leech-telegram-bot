@@ -1,6 +1,6 @@
 from asyncio import sleep, gather
 
-from bot import LOGGER, qbittorrent_client, qb_torrents, qb_listener_lock
+from .... import LOGGER, qbittorrent_client, qb_torrents, qb_listener_lock
 from ...ext_utils.bot_utils import sync_to_async
 from ...ext_utils.status_utils import (
     MirrorStatus,
@@ -104,7 +104,7 @@ class QbittorrentStatus:
                 msg = "task have been removed from queue/download"
             else:
                 LOGGER.info(f"Cancelling Download: {self._info.name}")
-                msg = "Download stopped by user!"
+                msg = "Stopped by user!"
             await sleep(0.3)
             await gather(
                 self.listener.on_download_error(msg),

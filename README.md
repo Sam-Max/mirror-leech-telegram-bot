@@ -6,16 +6,21 @@ programming in Python.
 - **TELEGRAM CHANNEL:** https://t.me/mltb_official_channel
 - **TELEGRAM GROUP:** https://t.me/mltb_official_support
 
-# Features
+<details>
+  <summary><h1>Features</h1></summary>
 
-## qBittorrent
+<details>
+  <summary><h5>QBittorrent</h5></summary>
 
 - External access to webui, so you can remove files or edit settings. Then you can sync settings in database with sync button in bsetting
 - Select files from a Torrent before and during download using mltb file selector (Requires Base URL) (task option)
 - Seed torrents to a specific ratio and time (task option)
 - Edit Global Options while the bot is running from bot settings (global option)
 
-## Aria2c
+</details>
+
+<details>
+  <summary><h5>Aria2c</h5></summary>
 
 - Select files from a Torrent before and during download (Requires Base URL) (task option)
 - Seed torrents to a specific ratio and time (task option)
@@ -24,13 +29,19 @@ programming in Python.
   is provided) (task option)
 - Edit Global Options while the bot is running from bot settings (global option)
 
-## Sabnzbd
+</details>
+
+<details>
+  <summary><h5>Sabnzbd</h5></summary>
 
 - External access to web interface, so you can remove files or edit settings. Then you can sync settings in database with sync button in bsetting
 - Edit Global Options while the bot is running from bot settings (global option)
 - Servers menu to edit/add/remove usenet servers
 
-## TG Upload/Download
+</details>
+
+<details>
+  <summary><h5>TG Upload/Download</h5></summary>
 
 - Split size (global, user, and task option)
 - Thumbnail (user and task option)
@@ -45,7 +56,10 @@ programming in Python.
 - Upload with custom layout multiple thubnmail (global, user option and task option)
 - Topics support
 
-## Google Drive
+</details>
+
+<details>
+  <summary><h5>Google Drive</h5></summary>
 
 - Download/Upload/Clone/Delete/Count from/to Google Drive
 - Count Google Drive files/folders
@@ -60,7 +74,10 @@ programming in Python.
 - Index link support only
   for [Bhadoo](https://gitlab.com/GoogleDriveIndex/Google-Drive-Index/-/blob/master/src/worker.js)
 
-## Rclone
+</details>
+
+<details>
+  <summary><h5>Rclone</h5></summary>
 
 - Transfer (download/upload/clone-server-side) without or with random service accounts (global and user option)
 - Ability to choose config, remote and path from list with or without buttons (global, user and task option)
@@ -70,7 +87,10 @@ programming in Python.
 - Rclone serve for combine remote to use it as index from all remotes (global option)
 - Upload destination (global, user and task option)
 
-## Status
+</details>
+
+<details>
+  <summary><h5>Status</h5></summary>
 
 - Download/Upload/Extract/Archive/Seed/Clone Status
 - Status Pages for an unlimited number of tasks, view a specific number of tasks in a message (global option)
@@ -81,7 +101,10 @@ programming in Python.
 - Steps buttons for how much next/previous buttons should step backward/forward (global and user option)
 - Status for each user (no auto refresh)
 
-## Yt-dlp
+</details>
+
+<details>
+  <summary><h5>Yt-dlp</h5></summary>
 
 - Yt-dlp quality buttons (task option)
 - Ability to use a specific yt-dlp option (global, user, and task option)
@@ -90,7 +113,10 @@ programming in Python.
 - Embed the original thumbnail and add it for leech
 - All supported audio formats
 
-## JDownloader
+</details>
+
+<details>
+  <summary><h5>JDownloader</h5></summary>
 
 - Synchronize Settings (global option)
 - Waiting to select (enable/disable files or change variants) before download start
@@ -98,22 +124,31 @@ programming in Python.
 - All settings can be edited from the remote access to your JDownloader with Web Interface, Android App, iPhone App or
   Browser Extensions
 
-## Mongo Database
+</details>
+
+<details>
+  <summary><h5>Mongo Database</h5></summary>
 
 - Store bot settings
 - Store user settings including thumbnails and all private files
 - Store RSS data
 - Store incompleted task messages
 - Store JDownloader settings
-- Store config.env file on first build and incase any change occured to it, then next build it will define variables
-  from config.env instead of database
+- Store config.py file on first build and incase any change occured to it, then next build it will define variables
+  from config.py instead of database
 
-## Torrents Search
+</details>
+
+<details>
+  <summary><h5>Torrents Search</h5></summary>
 
 - Search on torrents with Torrent Search API
 - Search on torrents with variable plugins using qBittorrent search engine
 
-## Archives
+</details>
+
+<details>
+  <summary><h5>Archives</h5></summary>
 
 - Extract splits with or without password
 - Zip file/folder with or without password
@@ -123,7 +158,10 @@ programming in Python.
 > ZIP, RAR, TAR, 7z, ISO, WIM, CAB, GZIP, BZIP2, APM, ARJ, CHM, CPIO, CramFS, DEB, DMG, FAT, HFS, LZH, LZMA, LZMA2,MBR,
 > MSI, MSLZ, NSIS, NTFS, RPM, SquashFS, UDF, VHD, XAR, Z, TAR.XZ, CBZ
 
-## RSS
+</details>
+
+<details>
+  <summary><h5>RSS</h5></summary>
 
 - Based on this repository [rss-chan](https://github.com/hyPnOtICDo0g/rss-chan)
 - Rss feed (user option)
@@ -132,7 +170,10 @@ programming in Python.
 - Sudo settings to control users feeds
 - All functions have been improved using buttons from one command.
 
-## Overall
+</details>
+
+<details>
+  <summary><h5>Overall</h5></summary>
 
 - Docker image support for linux `amd64, arm64/v8, arm/v7`
 - Edit variables and overwrite the private files while bot running (bot, user settings)
@@ -159,6 +200,7 @@ programming in Python.
 - Ability to save upload paths
 - Name Substitution to rename the files before upload
 - User can select whether he want to use his rclone.conf/token.pickle without adding mpt: or mrcc: before path/gd-id
+- FFmpeg commands to execute it after download (task option)
 - Supported Direct links Generators:
 
 > mediafire (file/folders), hxfile.co (need cookies txt with name) [hxfile.txt], streamtape.com, streamsb.net, streamhub.ink,
@@ -170,16 +212,17 @@ programming in Python.
 > ytdl),
 > tmpsend.com, qiwi.gg, berkasdrive.com, mp4upload.com, terabox.com (videos only file/folders).
 
-# How to deploy?
+</details>
+</details>
 
-## Prerequisites
+<details>
+  <summary><h1>How to deploy?</h1></summary>
 
-- Tutorial Video from A to Z:
-    - Thanks to [Wiszky](https://github.com/vishnoe115)
+<details>
+  <summary><h2>Prerequisites</h2></summary>
 
- <p><a href="https://youtu.be/IUmq1paCiHI"> <img src="https://img.shields.io/badge/See%20Video-black?style=for-the-badge&logo=YouTube" width="160""/></a></p>
-
-### 1. Installing requirements
+<details>
+  <summary><h5>1. Installing requirements</h5></summary>
 
 - Clone this repo:
 
@@ -209,20 +252,16 @@ pip3 install -r requirements-cli.txt
 
 ------
 
-### 2. Setting up config file
+</details>
+
+<details>
+  <summary><h5>2. Setting up config file</h5></summary>
 
 ```
-cp config_sample.env config.env
+cp config_sample.py config.py
 ```
 
-- Remove the first line saying:
-
-```
-_____REMOVE_THIS_LINE_____=True
-```
-
-Fill up rest of the fields. Meaning of each field is discussed below. **NOTE**: All values must be filled between
-quotes, even if it's `Int`, `Bool` or `List`.
+Fill up rest of the fields. Meaning of each field is discussed below.
 
 **1. Required Fields**
 
@@ -239,12 +278,12 @@ quotes, even if it's `Int`, `Bool` or `List`.
   session string use this command `python3 generate_string_session.py` after mounting repo folder for sure. `Str`. *
   *NOTE**: You can't use bot with private message. Use it with superGroup.
 - `DATABASE_URL`: Your Mongo Database URL (Connection string). Follow
-  this [Generate Database](https://github.com/anasty17/mirror-leech-telegram-bot/tree/master#generate-database) to
-  generate database. Data will be saved in Database: bot settings, users settings, rss data and incomplete tasks. **NOTE**: You can always edit all settings that saved in database from the official site -> (Browse collections). `Str`
+  this [Create Database](https://github.com/anasty17/test?tab=readme-ov-file#create-database) to
+  create database. Data will be saved in Database: bot settings, users settings, rss data and incomplete tasks. **NOTE**: You can always edit all settings that saved in database from the official site -> (Browse collections). `Str`
 - `DOWNLOAD_DIR`: The path to the vps local folder where the downloads should be downloaded to. `Str`
 - `CMD_SUFFIX`: Commands index number. This number will added at the end all commands. `Str`|`Int`
-- `AUTHORIZED_CHATS`: Fill user_id and chat_id of groups/users you want to authorize. To auth only specific topic(s) write it in this format `chat_id|thread_id` Ex:-100XXXXXXXXXXX|10 or Ex:-100XXXXXXXXXXX|10|12. Separate them by space. `Int`
-- `SUDO_USERS`: Fill user_id of users whom you want to give sudo permission. Separate them by space. `Int`
+- `AUTHORIZED_CHATS`: Fill user_id and chat_id of groups/users you want to authorize. To auth only specific topic(s) write it in this format `chat_id|thread_id` Ex:-100XXXXXXXXXXX or -100XXXXXXXXXXX|10 or Ex:-100XXXXXXXXXXX|10|12. Separate them by space. `Str`
+- `SUDO_USERS`: Fill user_id of users whom you want to give sudo permission. Separate them by space. `Str`
 - `DEFAULT_UPLOAD`: Whether `rc` to upload to `RCLONE_PATH` or `gd` to upload to `GDRIVE_ID`. Default is `rc`. Read
   More [HERE](https://github.com/anasty17/mirror-leech-telegram-bot/tree/master#upload).`Str`
 - `STATUS_UPDATE_INTERVAL`: Time in seconds after which the progress/status message will be updated. Recommended `10`
@@ -255,40 +294,42 @@ quotes, even if it's `Int`, `Bool` or `List`.
 - `INCOMPLETE_TASK_NOTIFIER`: Get incomplete task messages after restart. Require database and superGroup. Default
   is `False`. `Bool`
 - `FILELION_API`: Filelion api key to mirror Filelion links. Get it
-  from [Filelion](https://vidhide.com/?op=my_account). `str`
+  from [Filelion](https://vidhide.com/?op=my_account). `Str`
 - `STREAMWISH_API`: Streamwish api key to mirror Streamwish links. Get it
-  from [Streamwish](https://streamwish.com/?op=my_account). `str`
+  from [Streamwish](https://streamwish.com/?op=my_account). `Str`
 - `YT_DLP_OPTIONS`: Default yt-dlp options. Check all possible
   options [HERE](https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/YoutubeDL.py#L184) or use
   this [script](https://t.me/mltb_official_channel/177) to convert cli arguments to api options. Format: key:value|key:
-  value|key:value. Add `^` before integer or float, some numbers must be numeric and some string. `str`
+  value|key:value. Add `^` before integer or float, some numbers must be numeric and some string. `Str`
     - Example: "format:bv*+mergeall[vcodec=none]|nocheckcertificate:True"
 - `USE_SERVICE_ACCOUNTS`: Whether to use Service Accounts or not, with google-api-python-client. For this to work
   see [Using Service Accounts](https://github.com/anasty17/mirror-leech-telegram-bot#generate-service-accounts-what-is-service-account)
   section below. Default is `False`. `Bool`
-- `FFMPEG_CMDS`: list of lists of ffmpeg commands. You can set multiple ffmpeg commands for all files before upload. Don't write ffmpeg at beginning, start directly with the arguments. `list`
-  - Examples: [["-i", "mltb.mkv", "-c", "copy", "-c:s", "srt", "mltb.mkv"], ["-i", "mltb.video", "-c", "copy", "-c:s", "srt", "mltb"], ["-i", "mltb.m4a", "-c:a", "libmp3lame", "-q:a", "2", "mltb.mp3"], ["-i", "mltb.audio", "-c:a", "libmp3lame", "-q:a", "2", "mltb.mp3"]]
+- `FFMPEG_CMDS`: Dict of list values of ffmpeg commands. You can set multiple ffmpeg commands for all files before upload. Don't write ffmpeg at beginning, start directly with the arguments. `Dict`
+  - Examples: {"subtitle": ["-i mltb.mkv -c copy -c:s srt mltb.mkv", "-i mltb.video -c copy -c:s srt mltb"], "convert": ["-i mltb.m4a -c:a libmp3lame -q:a 2 mltb.mp3", "-i mltb.audio -c:a libmp3lame -q:a 2 mltb.mp3"]}
   **Notes**:
-  - Add `-del` to the list(s) which you want from the bot to delete the original files after command run complete!
+  - Don't add ffmpeg at the beginning!
+  - Add `-del` to the list which you want from the bot to delete the original files after command run complete!
+  - To execute one of those lists in bot for example, you must use -ff subtitle (list key) or -ff convert (list key)
   - Seed will get disbaled while using this option
-  - It must be list of list(s) event of one list added like [["-i", "mltb.mkv", "-c", "copy", "-c:s", "srt", "mltb.mkv", "-del"]]
   **Example**:
   - Here I will explain how to use mltb.* which is reference to files you want to work on.
   1. First cmd: the input is mltb.mkv so this cmd will work only on mkv videos and the output is mltb.mkv also so all outputs is mkv. `-del` will delete the original media after complete run of the cmd.
   2. Second cmd: the input is mltb.video so this cmd will work on all videos and the output is only mltb so the extenstion is same as input files.
   3. Third cmd: the input in mltb.m4a so this cmd will work only on m4a audios and the output is mltb.mp3 so the output extension is mp3.
   4. Fourth cmd: the input is mltb.audio so this cmd will work on all audios and the output is mltb.mp3 so the output extension is mp3.
-- `NAME_SUBSTITUTE`: Add word/letter/character/sentense/pattern to remove or replace with other words with sensitive case or without. **Notes**:
-  1. Seed will get disbaled while using this option
-  2. Before any character you must add `\BACKSLASH`, those are the characters: `\^$.|?*+()[]{}-`
-  * Example: script/code/s | mirror/leech | tea/ /s | clone | cpu/ | \[mltb\]/mltb | \\text\\/text/s
-   - script will get replaced by code with sensitive case
-   - mirror will get replaced by leech
-   - tea will get replaced by space with sensitive case
-   - clone will get removed
-   - cpu will get replaced by space
-   - [mltb] will get replaced by mltb
-   - \text\ will get replaced by text with sensitive case
+- `NAME_SUBSTITUTE`: Add word/letter/character/sentense/pattern to remove or replace with other words with sensitive case or without. `Str` 
+  **Notes**:
+    1. Seed will get disbaled while using this option
+    2. Before any character you must add `\BACKSLASH`, those are the characters: `\^$.|?*+()[]{}-`
+    * Example: script/code/s | mirror/leech | tea/ /s | clone | cpu/ | \[mltb\]/mltb | \\text\\/text/s
+    - script will get replaced by code with sensitive case
+    - mirror will get replaced by leech
+    - tea will get replaced by space with sensitive case
+    - clone will get removed
+    - cpu will get replaced by space
+    - [mltb] will get replaced by mltb
+    - \text\ will get replaced by text with sensitive case
 
 **3. GDrive Tools**
 
@@ -351,13 +392,13 @@ quotes, even if it's `Int`, `Bool` or `List`.
 
 **8. JDownloader**
 
-- `JD_EMAIL`: jdownloader email sign up on [JDownloader](https://my.jdownloader.org/)
-- `JD_PASS`: jdownloader password
+- `JD_EMAIL`: jdownloader email sign up on [JDownloader](https://my.jdownloader.org/). `Str`
+- `JD_PASS`: jdownloader password. `Str`
   - **JDownloader Config**: You can use your config from local machine in bot by *zipping* cfg folder (cfg.zip) and add it in repo folder.
 
 **9. Sabnzbd**
 
-- `USENET_SERVERS`: list of dictionaries, you can add as much as you want and there is a button for servers in sabnzbd settings to edit current servers and add new servers.
+- `USENET_SERVERS`: list of dictionaries, you can add as much as you want and there is a button for servers in sabnzbd settings to edit current servers and add new servers. `List`
 
   ***[{'name': 'main', 'host': '', 'port': 563, 'timeout': 60, 'username': '', 'password': '', 'connections': 8, 'ssl': 1, 'ssl_verify': 2, 'ssl_ciphers': '', 'enable': 1, 'required': 0, 'optional': 0, 'retention': 0, 'send_group': 0, 'priority': 0}]***
 
@@ -379,8 +420,8 @@ quotes, even if it's `Int`, `Bool` or `List`.
 **11. Queue System**
 
 - `QUEUE_ALL`: Number of parallel tasks of downloads and uploads. For example if 20 task added and `QUEUE_ALL` is `8`,
-  then the summation of uploading and downloading tasks are 8 and the rest in queue. `Int`. **NOTE**: if you want to
-  fill `QUEUE_DOWNLOAD` or `QUEUE_UPLOAD`, then `QUEUE_ALL` value must be greater than or equal to the greatest one and
+  then the summation of uploading and downloading tasks are 8 and the rest in queue. `Int`. 
+    **NOTE**: if you want to fill `QUEUE_DOWNLOAD` or `QUEUE_UPLOAD`, then `QUEUE_ALL` value must be greater than or equal to the greatest one and
   less than or equal to summation of `QUEUE_UPLOAD` and `QUEUE_DOWNLOAD`.
 - `QUEUE_DOWNLOAD`: Number of all parallel downloading tasks. `Int`
 - `QUEUE_UPLOAD`: Number of all parallel uploading tasks. `Int`
@@ -396,13 +437,17 @@ quotes, even if it's `Int`, `Bool` or `List`.
   Default api limit for each site). `Int`
 - `SEARCH_PLUGINS`: List of qBittorrent search plugins (github raw links). I have added some plugins, you can remove/add
   plugins as you want. Main
-  Source: [qBittorrent Search Plugins (Official/Unofficial)](https://github.com/qbittorrent/search-plugins/wiki/Unofficial-search-plugins). `List`
+  Source: [qBittorrent Search Plugins (Official/Unofficial)](https://github.com/qbittorrent/search-plugins). `List`
 
 ------
 
-### 3. Build And Run the Docker Image
+</details>
+</details>
 
-Make sure you still mount the app folder and installed the docker from official documentation.
+<details>
+  <summary><h2>Build And Run the Docker Image</h2></summary>
+
+Make sure you still mount the repo folder and installed the docker from official documentation.
 
 - There are two methods to build and run the docker:
     1. Using official docker commands.
@@ -410,7 +455,8 @@ Make sure you still mount the app folder and installed the docker from official 
 
 ------
 
-#### Build And Run The Docker Image Using Official Docker Commands
+<details>
+  <summary><h3>Build And Run The Docker Image Using Official Docker Commands</h3></summary>
 
 - Start Docker daemon (SKIP if already running, mostly you don't need to do this):
 
@@ -427,7 +473,7 @@ sudo docker build . -t mltb
 - Run the image:
 
 ```
-sudo docker run -p 80:80 -p 8080:8080 mltb
+sudo docker run -p 80:80 -p 8080:8080 -p 8070:8070 -p 8090:8090 mltb
 ```
 
 - To stop the running image:
@@ -442,7 +488,10 @@ sudo docker stop id
 
 ----
 
-#### Build And Run The Docker Image Using docker-compose
+</details>
+
+<details>
+  <summary><h3>Build And Run The Docker Image Using docker-compose</h3></summary>
 
 **NOTE**: If you want to use ports other than 80 and 8080 for torrent file selection and rclone serve respectively,
 change it in [docker-compose.yml](https://github.com/anasty17/mirror-leech-telegram-bot/blob/master/docker-compose.yml)
@@ -486,6 +535,8 @@ sudo docker compose logs --follow
 
 ------
 
+</details>
+
 **IMPORTANT NOTES**:
 
 1. Set `BASE_URL_PORT` and `RCLONE_SERVE_PORT` variables to any port you want to use. Default is `80` and `8080`
@@ -496,9 +547,14 @@ sudo docker compose logs --follow
 
 ------
 
-# Extras
+</details>
+</details>
 
-## Bot commands to be set in [@BotFather](https://t.me/BotFather)
+<details>
+  <summary><h1>Extras</h1></summary>
+
+<details>
+  <summary><h5>Bot commands to be set in <a href="https://t.me/BotFather">@BotFather</a></h5></summary>
 
 ```
 mirror - or /m Mirror
@@ -529,6 +585,7 @@ shell - Run commands in Shell
 aexec - Execute async function
 exec - Execute sync function
 restart - Restart the Bot
+restartses - Restart Telegram Session(s)
 stats - Bot Usage Stats
 ping - Ping the Bot
 help - All cmds with description
@@ -536,7 +593,10 @@ help - All cmds with description
 
 ------
 
-## Getting Google OAuth API credential file and token.pickle
+</details>
+
+<details>
+  <summary><h5>Getting Google OAuth API credential file and token.pickle</h5></summary>
 
 **NOTES**
 
@@ -565,7 +625,10 @@ python3 generate_drive_token.py
 
 ------
 
-## Getting rclone.conf
+</details>
+
+<details>
+  <summary><h5>Generating rclone.conf</h5></summary>
 
 1. Install rclone from [Official Site](https://rclone.org/install/)
 2. Create new remote(s) using `rclone config` command.
@@ -573,7 +636,10 @@ python3 generate_drive_token.py
 
 ------
 
-## Upload
+</details>
+
+<details>
+  <summary><h5>Upload</h5></summary>
 
 - `RCLONE_PATH` is like `GDRIVE_ID` a default path for mirror. In additional to those variables `DEFAULT_UPLOAD` to
   choose the default tool whether it's rclone or google-api-python-client.
@@ -590,7 +656,10 @@ python3 generate_drive_token.py
 
 ------
 
-## UPSTREAM REPO (Recommended)
+</details>
+
+<details>
+  <summary><h5>UPSTREAM REPO (Recommended)</h5></summary>
 
 - `UPSTREAM_REPO` variable can be used for edit/add any file in repository.
 - You can add private/public repository link to grab/overwrite all files from it.
@@ -609,29 +678,40 @@ python3 generate_drive_token.py
 
 ------
 
-## Bittorrent Seed
+</details>
+
+<details>
+  <summary><h5>Bittorrent Seed</h5></summary>
 
 - Using `-d` argument alone will lead to use global options for aria2c or qbittorrent.
 
-### Qbittorrent
+<details>
+  <summary><h3>QBittorrent</h3></summary>
 
 - Global options: `GlobalMaxRatio` and `GlobalMaxSeedingMinutes` in qbittorrent.conf, `-1` means no limit, but you can
   cancel manually.
     - **NOTE**: Don't change `MaxRatioAction`.
 
-### Aria2c
+</details>
+
+<details>
+  <summary><h3>Aria2c</h3></summary>
 
 - Global options: `--seed-ratio` (0 means no limit) and `--seed-time` (0 means no seed) in aria.sh.
 
 ------
 
-## Using Service Accounts for uploading to avoid user rate limit
+</details>
+</details>
+
+<details>
+  <summary><h5>Using Service Accounts for uploading to avoid user rate limit</h5></summary>
 
 > For Service Account to work, you must set `USE_SERVICE_ACCOUNTS` = "True" in config file or environment variables.
 > **NOTE**: Using Service Accounts is only recommended while uploading to a Team Drive.
 
-### 1. Generate Service Accounts. [What is Service Account?](https://cloud.google.com/iam/docs/service-accounts)
-
+<details>
+  <summary><h3>1. Generate Service Accounts. <a href="https://cloud.google.com/iam/docs/service-accounts">What is Service Account?</a></h3></summary>
 Let us create only the Service Accounts that we need.
 
 **Warning**: Abuse of this feature is not the aim of this project and we do **NOT** recommend that you make a lot of
@@ -655,7 +735,8 @@ python3 gen_sa_accounts.py --download-keys $PROJECTID
 
 Choose one of these methods
 
-##### 1. Create Service Accounts in existed Project (Recommended Method)
+<details>
+  <summary><h5>1. Create Service Accounts in existed Project (Recommended Method)</h5></summary>
 
 - List your projects ids
 
@@ -681,7 +762,10 @@ python3 gen_sa_accounts.py --create-sas $PROJECTID
 python3 gen_sa_accounts.py --download-keys $PROJECTID
 ```
 
-##### 2. Create Service Accounts in New Project
+</details>
+
+<details>
+  <summary><h5>2. Create Service Accounts in New Project</h5></summary>
 
 ```
 python3 gen_sa_accounts.py --quick-setup 1 --new-only
@@ -689,13 +773,18 @@ python3 gen_sa_accounts.py --quick-setup 1 --new-only
 
 A folder named accounts will be created which will contain keys for the Service Accounts.
 
-### 2. Add Service Accounts
+</details>
+</details>
+
+<details>
+  <summary><h3>2. Add Service Accounts</h3></summary>
 
 #### Two methods to add service accounts
 
 Choose one of these methods
 
-##### 1. Add Them To Google Group then to Team Drive (Recommended)
+<details>
+  <summary><h5>1. Add Them To Google Group then to Team Drive (Recommended)</h5></summary>
 
 - Mount accounts folder
 
@@ -725,7 +814,10 @@ cd ..
 Then add emails from emails.txt to Google Group, after that add this Google Group to your Shared Drive and promote it to
 manager and delete email.txt file from accounts folder
 
-##### 2. Add Them To Team Drive Directly
+</details>
+
+<details>
+  <summary><h5>2. Add Them To Team Drive Directly</h5></summary>
 
 - Run:
 
@@ -735,7 +827,12 @@ python3 add_to_team_drive.py -d SharedTeamDriveSrcID
 
 ------
 
-## Generate Database
+</details>
+</details>
+</details>
+
+<details>
+  <summary><h5>Create Database</h5></summary>
 
 1. Go to `https://mongodb.com/` and sign-up.
 2. Create Shared Cluster.
@@ -748,7 +845,10 @@ python3 add_to_team_drive.py -d SharedTeamDriveSrcID
 
 ------
 
-## Multi Drive List
+</details>
+
+<details>
+  <summary><h5>Multi Drive List</h5></summary>
 
 To use list from multi TD/folder. Run driveid.py in your terminal and follow it. It will generate **list_drives.txt**
 file or u can simply create `list_drives.txt` file in working directory and fill it, check below format:
@@ -767,7 +867,10 @@ TD2 0AO1JDB1t3i5jUk9PVA https://example.dev
 
 -----
 
-## Yt-dlp and Aria2c Authentication Using .netrc File
+</details>
+
+<details>
+  <summary><h5>Yt-dlp and Aria2c Authentication Using .netrc File</h5></summary>
 
 For using your premium accounts in yt-dlp or for protected Index Links, create .netrc file according to following
 format:
@@ -780,39 +883,32 @@ Format:
 machine host login username password my_password
 ```
 
-Example:
-
-```
-machine instagram login anas.tayyar password mypassword
-```
-
-**Instagram Note**: You must login even if you want to download public posts and after first try you must confirm that
-this was you logged in from different ip(you can confirm from phone app).
-
-**Youtube Note**: For `youtube` authentication
-use [cookies.txt](https://github.com/ytdl-org/youtube-dl#how-do-i-pass-cookies-to-youtube-dl) file.
-
 Using Aria2c you can also use built in feature from bot with or without username. Here example for index link without
 username.
 
 ```
 machine example.workers.dev password index_password
 ```
-
 Where host is the name of extractor (eg. instagram, Twitch). Multiple accounts of different hosts can be added each
 separated by a new line.
 
+**Yt-dlp**: 
+Authentication using [cookies.txt](https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp) file.
+
+
 -----
 
->
+</details>
+</details>
 
-## All Thanks To Our Contributors
+
+# All Thanks To Our Contributors
 
 <a href="https://github.com/anasty17/mirror-leech-telegram-bot/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=anasty17/mirror-leech-telegram-bot" />
 </a>
 
-## Donations
+# Donations
 
 <p> If you feel like showing your appreciation for this project, then how about buying me a coffee.</p>
 

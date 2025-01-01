@@ -9,7 +9,8 @@ from asyncio import (
     sleep,
 )
 
-from bot import user_data, config_dict, bot_loop
+from ... import user_data, bot_loop
+from ...core.config_manager import Config
 from ..telegram_helper.button_build import ButtonMaker
 from .telegraph_helper import telegraph
 from .help_messages import (
@@ -57,12 +58,13 @@ def bt_selection_buttons(id_):
     gid = id_[:12] if len(id_) > 25 else id_
     pin = "".join([n for n in id_ if n.isdigit()][:4])
     buttons = ButtonMaker()
-    BASE_URL = config_dict["BASE_URL"]
-    if config_dict["WEB_PINCODE"]:
-        buttons.url_button("Select Files", f"{BASE_URL}/app/files?gid={id_}")
+    if Config.WEB_PINCODE:
+        buttons.url_button("Select Files", f"{Config.BASE_URL}/app/files?gid={id_}")
         buttons.data_button("Pincode", f"sel pin {gid} {pin}")
     else:
-        buttons.url_button("Select Files", f"{BASE_URL}/app/files?gid={id_}&pin={pin}")
+        buttons.url_button(
+            "Select Files", f"{Config.BASE_URL}/app/files?gid={id_}&pin={pin}"
+        )
     buttons.data_button("Done Selecting", f"sel done {gid} {id_}")
     buttons.data_button("Cancel", f"sel cancel {gid}")
     return buttons.build_menu(2)
@@ -85,8 +87,14 @@ async def get_telegraph_list(telegraph_content):
 
 
 def arg_parser(items, arg_base):
+
     if not items:
         return
+
+    arg_start = -1
+    i = 0
+    total = len(items)
+
     bool_arg_set = {
         "-b",
         "-e",
@@ -104,43 +112,47 @@ def arg_parser(items, arg_base):
         "-doc",
         "-med",
     }
-    t = len(items)
-    i = 0
-    arg_start = -1
 
-    while i + 1 <= t:
+    def process_argument_with_values(start_index):
+        values = []
+        for j in range(start_index + 1, total):
+            if items[j] in arg_base:
+                check = " ".join(values).strip()
+                if check.startswith("[") and check.endswith("]"):
+                    break
+                elif check.startswith("["):
+                    pass
+                else:
+                    break
+            values.append(items[j])
+        return values
+
+    while i < total:
         part = items[i]
+
         if part in arg_base:
             if arg_start == -1:
                 arg_start = i
+
             if (
-                i + 1 == t
+                i + 1 == total
                 and part in bool_arg_set
                 or part
                 in ["-s", "-j", "-f", "-fd", "-fu", "-sync", "-ml", "-doc", "-med"]
             ):
                 arg_base[part] = True
             else:
-                sub_list = []
-                for j in range(i + 1, t):
-                    item = items[j]
-                    if item in arg_base:
-                        if part in bool_arg_set and not sub_list:
-                            arg_base[part] = True
-                        break
-                    sub_list.append(item)
-                    i += 1
+                sub_list = process_argument_with_values(i)
                 if sub_list:
                     arg_base[part] = " ".join(sub_list)
+                    i += len(sub_list)
+
         i += 1
-    if "link" in arg_base and items[0] not in arg_base:
-        link = []
-        if arg_start == -1:
-            link.extend(iter(items))
-        else:
-            link.extend(items[r] for r in range(arg_start))
-        if link:
-            arg_base["link"] = " ".join(link)
+
+    if "link" in arg_base:
+        link_items = items[:arg_start] if arg_start != -1 else items
+        if link_items:
+            arg_base["link"] = " ".join(link_items)
 
 
 def get_size_bytes(size):
