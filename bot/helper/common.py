@@ -210,9 +210,21 @@ class TaskConfig:
 
         if self.ffmpeg_cmds and not isinstance(self.ffmpeg_cmds, list):
             if self.user_dict.get("ffmpeg_cmds", None):
-                self.ffmpeg_cmds = self.user_dict["ffmpeg_cmds"].get(self.ffmpeg_cmds, None)
+                ffmpeg_dict = self.user_dict["ffmpeg_cmds"]
+                self.ffmpeg_cmds = [
+                    value
+                    for key in list(self.ffmpeg_cmds)
+                    if key in ffmpeg_dict
+                    for value in ffmpeg_dict[key]
+                ]
             elif "ffmpeg_cmds" not in self.user_dict and Config.FFMPEG_CMDS:
-                self.ffmpeg_cmds = Config.FFMPEG_CMDS.get(self.ffmpeg_cmds, None)
+                ffmpeg_dict = Config.FFMPEG_CMDS
+                self.ffmpeg_cmds = [
+                    value
+                    for key in list(self.ffmpeg_cmds)
+                    if key in ffmpeg_dict
+                    for value in ffmpeg_dict[key]
+                ]
             else:
                 self.ffmpeg_cmds = None
 
@@ -573,7 +585,12 @@ class TaskConfig:
                             return ""
                         if code != 0:
                             try:
-                                stderr = (await self.subproc.stderr.read()).decode().strip()
+                                async with self.subprocess_lock:
+                                    stderr = (
+                                        (await self.subproc.stderr.read())
+                                        .decode()
+                                        .strip()
+                                    )
                             except:
                                 stderr = "Unable to decode the error!"
                             LOGGER.error(
@@ -595,7 +612,8 @@ class TaskConfig:
                 return ""
             if code != 0:
                 try:
-                    stderr = (await self.subproc.stderr.read()).decode().strip()
+                    async with self.subprocess_lock:
+                        stderr = (await self.subproc.stderr.read()).decode().strip()
                 except:
                     stderr = "Unable to decode the error!"
                 LOGGER.error(f"{stderr}. Unable to extract zst file!. Path: {dl_path}")
@@ -660,17 +678,18 @@ class TaskConfig:
                                 return ""
                             if code != 0:
                                 try:
-                                    stderr = (await self.subproc.stderr.read()).decode().strip()
+                                    async with self.subprocess_lock:
+                                        stderr = (
+                                            (await self.subproc.stderr.read())
+                                            .decode()
+                                            .strip()
+                                        )
                                 except:
                                     stderr = "Unable to decode the error!"
                                 LOGGER.error(
                                     f"{stderr}. Unable to extract archive splits!. Path: {f_path}"
                                 )
-                    if (
-                        not self.seed
-                        and self.subproc is not None
-                        and self.subproc.returncode == 0
-                    ):
+                    if not self.seed and self.subproc is not None and code == 0:
                         for file_ in files:
                             if is_archive_split(file_) or is_archive(file_):
                                 del_path = ospath.join(dirpath, file_)
@@ -723,7 +742,8 @@ class TaskConfig:
                     return up_path
                 else:
                     try:
-                        stderr = (await self.subproc.stderr.read()).decode().strip()
+                        async with self.subprocess_lock:
+                            stderr = (await self.subproc.stderr.read()).decode().strip()
                     except:
                         stderr = "Unable to decode the error!"
                     LOGGER.error(
@@ -761,7 +781,7 @@ class TaskConfig:
             "7z",
             f"-v{split_size}b",
             "a",
-            "-mx=9",
+            "-mx=0",
             f"-p{pswd}",
             up_path,
             dl_path,
@@ -814,7 +834,8 @@ class TaskConfig:
             if not delete:
                 self.new_dir = ""
             try:
-                stderr = (await self.subproc.stderr.read()).decode().strip()
+                async with self.subprocess_lock:
+                    stderr = (await self.subproc.stderr.read()).decode().strip()
             except:
                 stderr = "Unable to decode the error!"
             LOGGER.error(f"{stderr}. Unable to zip this path: {dl_path}")
