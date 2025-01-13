@@ -1,6 +1,6 @@
 from aiofiles import open as aiopen
 from aiofiles.os import path as aiopath, makedirs, listdir
-from asyncio import create_subprocess_exec, gather
+from asyncio import create_subprocess_exec, gather, sleep, wait_for
 from asyncio.subprocess import PIPE
 from configparser import RawConfigParser
 from json import loads
@@ -13,7 +13,6 @@ from ...ext_utils.bot_utils import cmd_exec, sync_to_async
 from ...ext_utils.files_utils import (
     get_mime_type,
     count_files_and_folders,
-    clean_unwanted,
 )
 
 LOGGER = getLogger(__name__)
@@ -34,7 +33,7 @@ class RcloneTransferHelper:
         self._sa_index = 0
         self._sa_number = 0
         self._use_service_accounts = Config.USE_SERVICE_ACCOUNTS
-        self.rclone_select = False
+        self._rclone_select = False
 
     @property
     def transferred_size(self):
@@ -57,13 +56,18 @@ class RcloneTransferHelper:
         return self._size
 
     async def _progress(self):
-        while not (self._proc is None or self._listener.is_cancelled):
+        while not (
+            self._proc.returncode is not None
+            or self._proc.stdout.at_eof()
+            or self._listener.is_cancelled
+        ):
             try:
-                data = (await self._proc.stdout.readline()).decode()
+                data = await wait_for(self._proc.stdout.readline(), 10)
             except:
-                continue
+                break
             if not data:
                 break
+            data = data.decode().strip()
             if data := re_findall(
                 r"Transferred:\s+([\d.]+\s*\w+)\s+/\s+([\d.]+\s*\w+),\s+([\d.]+%)\s*,\s+([\d.]+\s*\w+/s),\s+ETA\s+([\dwdhms]+)",
                 data,
@@ -75,6 +79,7 @@ class RcloneTransferHelper:
                     self._speed,
                     self._eta,
                 ) = data[0]
+            await sleep(0.1)
 
     def _switch_service_account(self):
         if self._sa_index == self._sa_number - 1:
@@ -113,8 +118,9 @@ class RcloneTransferHelper:
 
     async def _start_download(self, cmd, remote_type):
         self._proc = await create_subprocess_exec(*cmd, stdout=PIPE, stderr=PIPE)
-        _, return_code = await gather(self._progress(), self._proc.wait())
-
+        await self._progress()
+        _, stderr = await self._proc.communicate()
+        return_code = self._proc.returncode
         if self._listener.is_cancelled:
             return
 
@@ -122,8 +128,9 @@ class RcloneTransferHelper:
             await self._listener.on_download_complete()
         elif return_code != -9:
             error = (
-                await self._proc.stderr.read()
-            ).decode().strip() or "Use <code>/shell cat rlog.txt</code> to see more information"
+                stderr.decode().strip()
+                or "Use <code>/shell cat rlog.txt</code> to see more information"
+            )
             if not error and remote_type == "drive" and self._use_service_accounts:
                 error = "Mostly your service accounts don't have access to this drive!"
             elif not error:
@@ -209,11 +216,10 @@ class RcloneTransferHelper:
             "--config",
             config_path,
             epath,
+            "-v",
             "--log-systemd",
             "--log-file",
             "rlog.txt",
-            "--log-level",
-            "ERROR",
         ]
         res, err, code = await cmd_exec(cmd)
 
@@ -238,21 +244,26 @@ class RcloneTransferHelper:
 
     async def _start_upload(self, cmd, remote_type):
         self._proc = await create_subprocess_exec(*cmd, stdout=PIPE, stderr=PIPE)
-        _, return_code = await gather(self._progress(), self._proc.wait())
+        await self._progress()
+        _, stderr = await self._proc.communicate()
+        return_code = self._proc.returncode
 
         if self._listener.is_cancelled:
             return False
-
         if return_code == -9:
             return False
-        elif return_code != 0:
+        elif return_code == 0:
+            return True
+        else:
             error = (
-                await self._proc.stderr.read()
-            ).decode().strip() or "Use <code>/shell cat rlog.txt</code> to see more information"
-            if not error and remote_type == "drive" and self._use_service_accounts:
-                error = "Mostly your service accounts don't have access to this drive or RATE_LIMIT_EXCEEDED"
-            elif not error:
-                error = "Use <code>/shell cat rlog.txt</code> to see more information"
+                stderr.decode().strip()
+                or "Use <code>/shell cat rlog.txt</code> to see more information"
+                or (
+                    "Mostly your service accounts don't have access to this drive or RATE_LIMIT_EXCEEDED"
+                    if remote_type == "drive" and self._use_service_accounts
+                    else "Use <code>/shell cat rlog.txt</code> to see more information"
+                )
+            )
             LOGGER.error(error)
             if (
                 self._sa_number != 0
@@ -274,10 +285,8 @@ class RcloneTransferHelper:
                     )
             await self._listener.on_upload_error(error[:4000])
             return False
-        else:
-            return True
 
-    async def upload(self, path, unwanted_files, ft_delete):
+    async def upload(self, path):
         self._is_upload = True
         rc_path = self._listener.up_dest.strip("/")
         if rc_path.startswith("mrcc:"):
@@ -291,7 +300,8 @@ class RcloneTransferHelper:
         if await aiopath.isdir(path):
             mime_type = "Folder"
             folders, files = await count_files_and_folders(
-                path, self._listener.extension_filter, unwanted_files
+                path,
+                self._listener.extension_filter,
             )
             rc_path += f"/{self._listener.name}" if rc_path else self._listener.name
         else:
@@ -328,9 +338,9 @@ class RcloneTransferHelper:
                 fremote = f"sa{self._sa_index:03}"
                 LOGGER.info(f"Upload with service account {fremote}")
 
-        method = "move" if not self._listener.seed or self._listener.new_dir else "copy"
+        method = "move"
         cmd = self._get_updated_command(
-            fconfig_path, path, f"{fremote}:{rc_path}", method, unwanted_files
+            fconfig_path, path, f"{fremote}:{rc_path}", method
         )
         if (
             remote_type == "drive"
@@ -361,11 +371,10 @@ class RcloneTransferHelper:
                 "--config",
                 oconfig_path,
                 destination,
+                "-v",
                 "--log-systemd",
                 "--log-file",
                 "rlog.txt",
-                "--log-level",
-                "ERROR",
             ]
             res, err, code = await cmd_exec(cmd)
 
@@ -379,8 +388,6 @@ class RcloneTransferHelper:
         if self._listener.is_cancelled:
             return
         LOGGER.info(f"Upload Done. Path: {destination}")
-        if self._listener.seed and not self._listener.new_dir:
-            await clean_unwanted(path, ft_delete)
         await self._listener.on_upload_complete(
             link, files, folders, mime_type, destination
         )
@@ -413,21 +420,16 @@ class RcloneTransferHelper:
                 cmd.extend(("--tpslimit", "3", "--transfers", "3"))
 
         self._proc = await create_subprocess_exec(*cmd, stdout=PIPE, stderr=PIPE)
-        _, return_code = await gather(self._progress(), self._proc.wait())
+        await self._progress()
+        _, stderr = await self._proc.communicate()
+        return_code = self._proc.returncode
 
         if self._listener.is_cancelled:
             return None, None
 
         if return_code == -9:
             return None, None
-        elif return_code != 0:
-            error = (
-                await self._proc.stderr.read()
-            ).decode().strip() or "Use <code>/shell cat rlog.txt</code> to see more information"
-            LOGGER.error(error)
-            await self._listener.on_upload_error(error[:4000])
-            return None, None
-        else:
+        elif return_code == 0:
             if dst_remote_type == "drive":
                 link, destination = await self._get_gdrive_link(
                     config_path, dst_remote, dst_path, mime_type
@@ -447,11 +449,10 @@ class RcloneTransferHelper:
                     "--config",
                     config_path,
                     destination,
+                    "-v",
                     "--log-systemd",
                     "--log-file",
                     "rlog.txt",
-                    "--log-level",
-                    "ERROR",
                 ]
                 res, err, code = await cmd_exec(cmd)
 
@@ -468,14 +469,25 @@ class RcloneTransferHelper:
                     )
                     return None, destination
 
+        else:
+            error = (
+                stderr.decode().strip()
+                or "Use <code>/shell cat rlog.txt</code> to see more information"
+            )
+            LOGGER.error(error)
+            await self._listener.on_upload_error(error[:4000])
+            return None, None
+
     def _get_updated_command(
-        self, config_path, source, destination, method, unwanted_files=None
+        self,
+        config_path,
+        source,
+        destination,
+        method,
     ):
-        if unwanted_files is None:
-            unwanted_files = []
         if source.split(":")[-1].startswith("rclone_select"):
             source = f"{source.split(":")[0]}:"
-            self.rclone_select = True
+            self._rclone_select = True
         else:
             ext = "*.{" + ",".join(self._listener.extension_filter) + "}"
         cmd = [
@@ -487,19 +499,19 @@ class RcloneTransferHelper:
             "-P",
             source,
             destination,
+            "-L",
             "--retries-sleep",
             "3s",
             "--ignore-case",
             "--low-level-retries",
             "1",
             "-M",
+            "-v",
             "--log-systemd",
             "--log-file",
             "rlog.txt",
-            "--log-level",
-            "ERROR",
         ]
-        if self.rclone_select:
+        if self._rclone_select:
             cmd.extend(("--files-from", self._listener.link))
         else:
             cmd.extend(("--exclude", ext))
@@ -511,9 +523,6 @@ class RcloneTransferHelper:
                     cmd.extend((key, value))
                 elif len(flag) > 0:
                     cmd.append(flag.strip())
-        if unwanted_files:
-            for f in unwanted_files:
-                cmd.extend(("--exclude", f.rsplit("/", 1)[1]))
         return cmd
 
     @staticmethod
