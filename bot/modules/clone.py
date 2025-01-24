@@ -209,7 +209,6 @@ class Clone(TaskListener):
                     self.up_dest += (
                         self.name if self.up_dest.endswith(":") else f"/{self.name}"
                     )
-
                     mime_type = "Folder"
                 else:
                     if not self.name:

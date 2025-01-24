@@ -62,7 +62,7 @@ class RcloneTransferHelper:
             or self._listener.is_cancelled
         ):
             try:
-                data = await wait_for(self._proc.stdout.readline(), 10)
+                data = await wait_for(self._proc.stdout.readline(), 60)
             except:
                 break
             if not data:
@@ -79,7 +79,7 @@ class RcloneTransferHelper:
                     self._speed,
                     self._eta,
                 ) = data[0]
-            await sleep(0.1)
+            await sleep(0.05)
 
     def _switch_service_account(self):
         if self._sa_index == self._sa_number - 1:
@@ -195,18 +195,8 @@ class RcloneTransferHelper:
 
         await self._start_download(cmd, remote_type)
 
-    async def _get_gdrive_link(self, config_path, remote, rc_path, mime_type):
-        if mime_type == "Folder":
-            epath = rc_path.strip("/").rsplit("/", 1)
-            epath = f"{remote}:{epath[0]}" if len(epath) > 1 else f"{remote}:"
-            destination = f"{remote}:{rc_path}"
-        elif rc_path:
-            epath = f"{remote}:{rc_path}/{self._listener.name}"
-            destination = epath
-        else:
-            epath = f"{remote}:{rc_path}{self._listener.name}"
-            destination = epath
-
+    async def _get_gdrive_link(self, config_path, destination, mime_type):
+        epath = destination.rsplit("/", 1)[0] if mime_type == "Folder" else destination
         cmd = [
             "rclone",
             "lsjson",
@@ -240,7 +230,7 @@ class RcloneTransferHelper:
                 f"while getting drive link. Path: {destination}. Stderr: {err}"
             )
             link = ""
-        return link, destination
+        return link
 
     async def _start_upload(self, cmd, remote_type):
         self._proc = await create_subprocess_exec(*cmd, stdout=PIPE, stderr=PIPE)
@@ -288,7 +278,7 @@ class RcloneTransferHelper:
 
     async def upload(self, path):
         self._is_upload = True
-        rc_path = self._listener.up_dest.strip("/")
+        rc_path = self._listener.up_dest
         if rc_path.startswith("mrcc:"):
             rc_path = rc_path.split("mrcc:", 1)[1]
             oconfig_path = f"rclone/{self._listener.user_id}.conf"
@@ -353,18 +343,16 @@ class RcloneTransferHelper:
         if not result:
             return
 
-        if remote_type == "drive":
-            link, destination = await self._get_gdrive_link(
-                oconfig_path, oremote, rc_path, mime_type
-            )
+        if mime_type == "Folder":
+            destination = f"{oremote}:{rc_path}"
+        elif rc_path:
+            destination = f"{oremote}:{rc_path}/{self._listener.name}"
         else:
-            if mime_type == "Folder":
-                destination = f"{oremote}:{rc_path}"
-            elif rc_path:
-                destination = f"{oremote}:{rc_path}/{self._listener.name}"
-            else:
-                destination = f"{oremote}:{self._listener.name}"
+            destination = f"{oremote}:{self._listener.name}"
 
+        if remote_type == "drive":
+            link = await self._get_gdrive_link(oconfig_path, destination, mime_type)
+        else:
             cmd = [
                 "rclone",
                 "link",
@@ -430,19 +418,16 @@ class RcloneTransferHelper:
         if return_code == -9:
             return None, None
         elif return_code == 0:
-            if dst_remote_type == "drive":
-                link, destination = await self._get_gdrive_link(
-                    config_path, dst_remote, dst_path, mime_type
+            if mime_type != "Folder":
+                destination += (
+                    f"/{self._listener.name}" if dst_path else self._listener.name
                 )
+            if dst_remote_type == "drive":
+                link = await self._get_gdrive_link(config_path, destination, mime_type)
                 return (
                     (None, None) if self._listener.is_cancelled else (link, destination)
                 )
             else:
-                if mime_type != "Folder":
-                    destination += (
-                        f"/{self._listener.name}" if dst_path else self._listener.name
-                    )
-
                 cmd = [
                     "rclone",
                     "link",

@@ -1,6 +1,11 @@
 from PIL import Image
 from aiofiles.os import remove, path as aiopath, makedirs
-from asyncio import create_subprocess_exec, gather, wait_for, sleep
+from asyncio import (
+    create_subprocess_exec,
+    gather,
+    wait_for,
+    sleep,
+)
 from asyncio.subprocess import PIPE
 from os import path as ospath, cpu_count
 from re import search as re_search, escape
@@ -10,7 +15,7 @@ from aioshutil import rmtree
 from ... import LOGGER
 from ...core.config_manager import Config
 from .bot_utils import cmd_exec, sync_to_async
-from .files_utils import ARCH_EXT, get_mime_type
+from .files_utils import get_mime_type, is_archive, is_archive_split
 from .status_utils import time_to_seconds
 
 
@@ -26,39 +31,6 @@ async def create_thumb(msg, _id=""):
     await sync_to_async(Image.open(photo_dir).convert("RGB").save, output, "JPEG")
     await remove(photo_dir)
     return output
-
-
-async def is_multi_streams(path):
-    try:
-        result = await cmd_exec(
-            [
-                "ffprobe",
-                "-hide_banner",
-                "-loglevel",
-                "error",
-                "-print_format",
-                "json",
-                "-show_streams",
-                path,
-            ]
-        )
-    except Exception as e:
-        LOGGER.error(f"Get Video Streams: {e}. Mostly File not found! - File: {path}")
-        return False
-    if result[0] and result[2] == 0:
-        fields = eval(result[0]).get("streams")
-        if fields is None:
-            LOGGER.error(f"get_video_streams: {result}")
-            return False
-        videos = 0
-        audios = 0
-        for stream in fields:
-            if stream.get("codec_type") == "video":
-                videos += 1
-            elif stream.get("codec_type") == "audio":
-                audios += 1
-        return videos > 1 or audios > 1
-    return False
 
 
 async def get_media_info(path):
@@ -93,8 +65,10 @@ async def get_media_info(path):
 
 async def get_document_type(path):
     is_video, is_audio, is_image = False, False, False
-    if path.endswith(tuple(ARCH_EXT)) or re_search(
-        r".+(\.|_)(rar|7z|zip|bin)(\.0*\d+)?$", path
+    if (
+        is_archive(path)
+        or is_archive_split(path)
+        or re_search(r".+(\.|_)(rar|7z|zip|bin)(\.0*\d+)?$", path)
     ):
         return is_video, is_audio, is_image
     mime_type = await sync_to_async(get_mime_type, path)
@@ -207,10 +181,16 @@ async def get_audio_thumbnail(audio_file):
         f"{max(1, cpu_count() // 2)}",
         output,
     ]
-    _, err, code = await cmd_exec(cmd)
-    if code != 0 or not await aiopath.exists(output):
+    try:
+        _, err, code = await wait_for(cmd_exec(cmd), timeout=60)
+        if code != 0 or not await aiopath.exists(output):
+            LOGGER.error(
+                f"Error while extracting thumbnail from audio. Name: {audio_file} stderr: {err}"
+            )
+            return None
+    except:
         LOGGER.error(
-            f"Error while extracting thumbnail from audio. Name: {audio_file} stderr: {err}"
+            f"Error while extracting thumbnail from audio. Name: {audio_file}. Error: Timeout some issues with ffmpeg with specific arch!"
         )
         return None
     return output
@@ -356,7 +336,7 @@ class FFMpeg:
             or self._listener.subproc.stdout.at_eof()
         ):
             try:
-                line = await wait_for(self._listener.subproc.stdout.readline(), 2)
+                line = await wait_for(self._listener.subproc.stdout.readline(), 60)
             except:
                 break
             line = line.decode().strip()
@@ -402,14 +382,18 @@ class FFMpeg:
         for index in indices:
             output_file = ffmpeg[index]
             if output_file != "mltb" and output_file.startswith("mltb"):
-                oext = ospath.splitext(output_file)[-1]
-                if ext == oext:
-                    base_name = f"ffmpeg{index}.{base_name}"
+                bo, oext = ospath.splitext(output_file)
+                if oext:
+                    if ext == oext:
+                        prefix = f"ffmpeg{index}." if bo == "mltb" else ""
+                    else:
+                        prefix = ""
+                    ext = ""
                 else:
-                    ext = oext
+                    prefix = ""
             else:
-                base_name = f"ffmpeg{index}.{base_name}"
-            output = f"{dir}/{base_name}{ext}"
+                prefix = f"ffmpeg{index}."
+            output = f"{dir}/{prefix}{output_file.replace("mltb", base_name)}{ext}"
             outputs.append(output)
             ffmpeg[index] = output
         if self._listener.is_cancelled:
@@ -456,9 +440,7 @@ class FFMpeg:
                 "-i",
                 video_file,
                 "-map",
-                "0:v",
-                "-map",
-                "0:a",
+                "0",
                 "-c:v",
                 "libx264",
                 "-c:a",
@@ -468,11 +450,11 @@ class FFMpeg:
                 output,
             ]
             if ext == "mp4":
-                cmd[16:16] = ["-c:s", "mov_text"]
+                cmd[14:14] = ["-c:s", "mov_text"]
             elif ext == "mkv":
-                cmd[16:16] = ["-c:s", "ass"]
+                cmd[14:14] = ["-c:s", "ass"]
             else:
-                cmd[16:16] = ["-c:s", "copy"]
+                cmd[14:14] = ["-c:s", "copy"]
         else:
             cmd = [
                 "ffmpeg",
@@ -648,7 +630,7 @@ class FFMpeg:
 
     async def split(self, f_path, file_, parts, split_size):
         self.clear()
-        multi_streams = await is_multi_streams(f_path)
+        multi_streams = True
         self._total_time = duration = (await get_media_info(f_path))[0]
         base_name, extension = ospath.splitext(file_)
         split_size -= 3000000

@@ -1,10 +1,11 @@
-from aiofiles.os import path as aiopath, remove, makedirs
+from aiofiles.os import path as aiopath, remove, makedirs, listdir
 from asyncio import sleep, gather
 from os import walk, path as ospath
 from secrets import token_urlsafe
 from aioshutil import move, rmtree
 from pyrogram.enums import ChatAction
 from re import sub, I
+from shlex import split
 
 from .. import (
     user_data,
@@ -247,6 +248,7 @@ class TaskConfig:
                     "user_tokens", False
                 ):
                     self.up_dest = f"mrcc:{self.up_dest}"
+                self.up_dest = self.up_dest.strip("/")
             else:
                 raise ValueError("Wrong Upload Destination!")
 
@@ -568,7 +570,7 @@ class TaskConfig:
                     if (
                         is_first_archive_split(file_)
                         or is_archive(file_)
-                        and not file_.endswith(".rar")
+                        and not file_.lower().endswith(".rar")
                     ):
                         f_path = ospath.join(dirpath, file_)
                         self.files_to_proceed.append(f_path)
@@ -584,7 +586,7 @@ class TaskConfig:
                 if (
                     is_first_archive_split(file_)
                     or is_archive(file_)
-                    and not file_.endswith(".rar")
+                    and not file_.lower().endswith(".rar")
                 ):
                     self.proceed_count += 1
                     f_path = ospath.join(dirpath, file_)
@@ -592,24 +594,20 @@ class TaskConfig:
                     if not self.is_file:
                         self.subname = file_
                     code = await sevenz.extract(f_path, t_path, pswd)
-                    if code == 0:
+            if code == 0:
+                for file_ in files:
+                    if is_archive_split(file_) or is_archive(file_):
+                        del_path = ospath.join(dirpath, file_)
                         try:
-                            await remove(f_path)
+                            await remove(del_path)
                         except:
                             self.is_cancelled = True
-            for file_ in files:
-                if is_archive_split(file_):
-                    del_path = ospath.join(dirpath, file_)
-                    try:
-                        await remove(del_path)
-                    except:
-                        self.is_cancelled = True
         return t_path if self.is_file and code == 0 else dl_path
 
     async def proceed_ffmpeg(self, dl_path, gid):
         checked = False
         cmds = [
-            [part.strip() for part in item.split() if part.strip()]
+            [part.strip() for part in split(item) if part.strip()]
             for item in self.ffmpeg_cmds
         ]
         try:
@@ -645,9 +643,13 @@ class TaskConfig:
                         break
                     elif is_video and ext == "audio":
                         break
-                    elif is_audio and ext == "video":
+                    elif is_audio and not is_video and ext == "video":
                         break
-                    elif ext != "all" and not dl_path.lower().endswith(ext):
+                    elif ext not in [
+                        "all",
+                        "audio",
+                        "video",
+                    ] and not dl_path.lower().endswith(ext):
                         break
                     new_folder = ospath.splitext(dl_path)[0]
                     name = ospath.basename(dl_path)
@@ -670,7 +672,7 @@ class TaskConfig:
                     if res:
                         if delete_files:
                             await remove(file_path)
-                            if len(res) == 1:
+                            if len(await listdir(new_folder)) == 1:
                                 folder = new_folder.rsplit("/", 1)[0]
                                 self.name = ospath.basename(res[0])
                                 if self.name.startswith("ffmpeg"):
@@ -685,12 +687,14 @@ class TaskConfig:
                             dl_path = new_folder
                             self.name = new_folder.rsplit("/", 1)[-1]
                     else:
+                        await move(file_path, dl_path)
                         await rmtree(new_folder)
                 else:
                     for dirpath, _, files in await sync_to_async(
                         walk, dl_path, topdown=False
                     ):
                         for file_ in files:
+                            var_cmd = cmd.copy()
                             if self.is_cancelled:
                                 return False
                             f_path = ospath.join(dirpath, file_)
@@ -699,12 +703,16 @@ class TaskConfig:
                                 continue
                             elif is_video and ext == "audio":
                                 continue
-                            elif is_audio and ext == "video":
+                            elif is_audio and not is_video and ext == "video":
                                 continue
-                            elif ext != "all" and not f_path.lower().endswith(ext):
+                            elif ext not in [
+                                "all",
+                                "audio",
+                                "video",
+                            ] and not f_path.lower().endswith(ext):
                                 continue
                             self.proceed_count += 1
-                            cmd[index + 1] = f_path
+                            var_cmd[index + 1] = f_path
                             if not checked:
                                 checked = True
                                 async with task_dict_lock:
@@ -717,7 +725,7 @@ class TaskConfig:
                             LOGGER.info(f"Running ffmpeg cmd for: {f_path}")
                             self.subsize = await get_path_size(f_path)
                             self.subname = file_
-                            res = await ffmpeg.ffmpeg_cmds(cmd, f_path)
+                            res = await ffmpeg.ffmpeg_cmds(var_cmd, f_path)
                             if res and delete_files:
                                 await remove(f_path)
                                 if len(res) == 1:
@@ -790,7 +798,6 @@ class TaskConfig:
                         move(dl_path, f"{new_folder}/{name}"),
                         move(res, new_folder),
                     )
-                    self.name = new_folder.rsplit("/", 1)[-1]
                     return new_folder
         else:
             LOGGER.info(f"Creating Screenshot for: {dl_path}")

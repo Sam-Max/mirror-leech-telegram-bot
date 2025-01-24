@@ -404,6 +404,7 @@ Fill up rest of the fields. Meaning of each field is discussed below.
 
 - `RSS_DELAY`: Time in seconds for rss refresh interval. Recommended `600` second at least. Default is `600` in
   sec. `Int`
+- `RSS_SIZE_LIMIT`: Item size limit in bytes. Default is `0`. `INT`
 - `RSS_CHAT`: Chat `ID or USERNAME or ID|TOPIC_ID or USERNAME|TOPIC_ID` where rss links will be sent. If you want message to be sent to the channel then add channel id. Add `-100` before channel id. `Int`|`Str`
     - **RSS NOTES**: `RSS_CHAT` is required, otherwise monitor will not work. You must use `USER_STRING_SESSION` --OR--
       *CHANNEL*. If using channel then bot should be added in both channel and group(linked to channel) and `RSS_CHAT`
@@ -452,12 +453,6 @@ Make sure you still mount the repo folder and installed the docker from official
 <details>
   <summary><h3>Build And Run The Docker Image Using Official Docker Commands</h3></summary>
 
-- Start Docker daemon (SKIP if already running, mostly you don't need to do this):
-
-```
-sudo dockerd
-```
-
 - Build Docker image:
 
 ```
@@ -467,7 +462,7 @@ sudo docker build . -t mltb
 - Run the image:
 
 ```
-sudo docker run -p 80:80 -p 8080:8080 -p 8070:8070 -p 8090:8090 mltb
+sudo docker run --network host mltb
 ```
 
 - To stop the running image:
@@ -486,10 +481,6 @@ sudo docker stop id
 
 <details>
   <summary><h3>Build And Run The Docker Image Using docker-compose</h3></summary>
-
-**NOTE**: If you want to use ports other than 80 and 8080 for torrent file selection and rclone serve respectively,
-change it in [docker-compose.yml](https://github.com/anasty17/mirror-leech-telegram-bot/blob/master/docker-compose.yml)
-also.
 
 - Install docker compose plugin
 
@@ -887,7 +878,7 @@ Where host is the name of extractor (eg. instagram, Twitch). Multiple accounts o
 separated by a new line.
 
 **Yt-dlp**: 
-Authentication using [cookies.txt](https://github.com/yt-dlp/yt-dlp/wiki/FAQ#how-do-i-pass-cookies-to-yt-dlp) file.
+Authentication using [cookies.txt](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies) file.
 
 
 -----
