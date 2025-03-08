@@ -85,7 +85,9 @@ class GoogleDriveDownload(GoogleDriveHelper):
                 self._download_folder(file_id, path, filename)
             elif not ospath.isfile(
                 f"{path}{filename}"
-            ) and not filename.lower().endswith(tuple(self.listener.excluded_extensions)):
+            ) and not filename.strip().lower().endswith(
+                tuple(self.listener.excluded_extensions)
+            ):
                 self._download_file(file_id, path, filename, mime_type)
             if self.listener.is_cancelled:
                 break
@@ -93,7 +95,7 @@ class GoogleDriveDownload(GoogleDriveHelper):
     @retry(
         wait=wait_exponential(multiplier=2, min=3, max=6),
         stop=stop_after_attempt(3),
-        retry=(retry_if_exception_type(Exception)),
+        retry=retry_if_exception_type(Exception),
     )
     def _download_file(self, file_id, path, filename, mime_type, export=False):
         if export:
@@ -111,7 +113,7 @@ class GoogleDriveDownload(GoogleDriveHelper):
             ext = ospath.splitext(filename)[1]
             filename = f"{filename[:245]}{ext}"
 
-            if self.listener.name.endswith(ext):
+            if self.listener.name.strip().endswith(ext):
                 self.listener.name = filename
         if self.listener.is_cancelled:
             return

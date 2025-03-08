@@ -81,17 +81,19 @@ class DbManager:
     async def update_private_file(self, path):
         if self._return:
             return
+        db_path = path.replace(".", "__")
         if await aiopath.exists(path):
             async with aiopen(path, "rb+") as pf:
                 pf_bin = await pf.read()
+            await self.db.settings.files.update_one(
+                {"_id": TgClient.ID}, {"$set": {db_path: pf_bin}}, upsert=True
+            )
+            if path == "config.py":
+                await self.update_deploy_config()
         else:
-            pf_bin = ""
-        path = path.replace(".", "__")
-        await self.db.settings.files.update_one(
-            {"_id": TgClient.ID}, {"$set": {path: pf_bin}}, upsert=True
-        )
-        if path == "config.py":
-            await self.update_deploy_config()
+            await self.db.settings.files.update_one(
+                {"_id": TgClient.ID}, {"$unset": {db_path: ""}}, upsert=True
+            )
 
     async def update_nzb_config(self):
         if self._return:
@@ -109,7 +111,36 @@ class DbManager:
         data = data.copy()
         for key in ("THUMBNAIL", "RCLONE_CONFIG", "TOKEN_PICKLE"):
             data.pop(key, None)
-        await self.db.users.update_one({"_id": user_id}, {"$set": data}, upsert=True)
+        pipeline = [
+            {
+                "$replaceRoot": {
+                    "newRoot": {
+                        "$mergeObjects": [
+                            data,
+                            {
+                                "$arrayToObject": {
+                                    "$filter": {
+                                        "input": {"$objectToArray": "$$ROOT"},
+                                        "as": "field",
+                                        "cond": {
+                                            "$in": [
+                                                "$$field.k",
+                                                [
+                                                    "THUMBNAIL",
+                                                    "RCLONE_CONFIG",
+                                                    "TOKEN_PICKLE",
+                                                ],
+                                            ]
+                                        },
+                                    }
+                                }
+                            },
+                        ]
+                    }
+                }
+            }
+        ]
+        await self.db.users.update_one({"_id": user_id}, pipeline, upsert=True)
 
     async def update_user_doc(self, user_id, key, path=""):
         if self._return:
@@ -117,11 +148,13 @@ class DbManager:
         if path:
             async with aiopen(path, "rb+") as doc:
                 doc_bin = await doc.read()
+            await self.db.users.update_one(
+                {"_id": user_id}, {"$set": {key: doc_bin}}, upsert=True
+            )
         else:
-            doc_bin = ""
-        await self.db.users.update_one(
-            {"_id": user_id}, {"$set": {key: doc_bin}}, upsert=True
-        )
+            await self.db.users.update_one(
+                {"_id": user_id}, {"$unset": {key: ""}}, upsert=True
+            )
 
     async def rss_update_all(self):
         if self._return:

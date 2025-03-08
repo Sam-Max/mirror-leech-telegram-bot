@@ -1,8 +1,7 @@
 from contextlib import suppress
 from aiofiles.os import remove, path as aiopath
-from asyncio import sleep
+from asyncio import sleep, TimeoutError
 from time import time
-from aioaria2.exceptions import Aria2rpcException
 from aiohttp.client_exceptions import ClientError
 
 from ... import task_dict_lock, task_dict, LOGGER, intervals
@@ -50,6 +49,8 @@ async def _on_download_started(api, data):
     await sleep(2)
     if task := await get_task_by_gid(gid):
         download = await api.tellStatus(gid)
+        if "bittorrent" in download:
+            task.listener.is_torrent = True
         task.listener.name = aria2_name(download)
         msg, button = await stop_duplicate_check(task.listener)
         if msg:
@@ -62,7 +63,7 @@ async def _on_download_complete(api, data):
         gid = data["params"][0]["gid"]
         download = await api.tellStatus(gid)
         options = await api.getOption(gid)
-    except (Aria2rpcException, ClientError) as e:
+    except (TimeoutError, ClientError, Exception) as e:
         LOGGER.error(f"onDownloadComplete: {e}")
         return
     if options.get("follow-torrent", "") == "false":
@@ -120,14 +121,14 @@ async def _on_bt_download_complete(api, data):
         if task.listener.seed:
             try:
                 await api.changeOption(gid, {"max-upload-limit": "0"})
-            except (Aria2rpcException, ClientError) as e:
+            except (TimeoutError, ClientError, Exception) as e:
                 LOGGER.error(
                     f"{e} You are not able to seed because you added global option seed-time=0 without adding specific seed_time for this torrent GID: {gid}"
                 )
         else:
             try:
                 await api.forcePause(gid)
-            except (Aria2rpcException, ClientError) as e:
+            except (TimeoutError, ClientError, Exception) as e:
                 LOGGER.error(f"onBtDownloadComplete: {e} GID: {gid}")
         await task.listener.on_download_complete()
         if intervals["stopAll"]:
@@ -174,7 +175,7 @@ async def _on_download_error(api, data):
     await sleep(1)
     LOGGER.info(f"onDownloadError: {gid}")
     error = "None"
-    with suppress(Aria2rpcException, ClientError):
+    with suppress(TimeoutError, ClientError, Exception):
         download = await api.tellStatus(gid)
         options = await api.getOption(gid)
         error = download.get("errorMessage", "")
