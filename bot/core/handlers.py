@@ -242,13 +242,6 @@ def add_handlers():
     )
     TgClient.bot.add_handler(
         MessageHandler(
-            restart_sessions,
-            filters=command(BotCommands.RestartSessionsCommand, case_sensitive=True)
-            & CustomFilters.sudo,
-        )
-    )
-    TgClient.bot.add_handler(
-        MessageHandler(
             ping,
             filters=command(BotCommands.PingCommand, case_sensitive=True)
             & CustomFilters.authorized,
@@ -316,6 +309,13 @@ def add_handlers():
         MessageHandler(
             ytdl_leech,
             filters=command(BotCommands.YtdlLeechCommand, case_sensitive=True)
+            & CustomFilters.authorized,
+        )
+    )
+    TgClient.bot.add_handler(
+        MessageHandler(
+            hydra_search,
+            filters=command(BotCommands.NzbSearchCommand, case_sensitive=True)
             & CustomFilters.authorized,
         )
     )

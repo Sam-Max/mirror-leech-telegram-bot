@@ -151,6 +151,8 @@ def arg_parser(items, arg_base):
                         if not sub_list:
                             break
                         check = " ".join(sub_list).strip()
+                        if part != "-ff":
+                            break
                         if check.startswith("[") and check.endswith("]"):
                             break
                         elif not check.startswith("["):
@@ -158,14 +160,18 @@ def arg_parser(items, arg_base):
                     sub_list.append(items[j])
                 if sub_list:
                     value = " ".join(sub_list)
-                    if part == "-ff" and not value.strip().startswith("["):
-                        arg_base[part].add(value)
+                    if part == "-ff":
+                        if not value.strip().startswith("["):
+                            arg_base[part].add(value)
+                        else:
+                            try:
+                                arg_base[part].add(tuple(eval(value)))
+                            except:
+                                pass
                     else:
                         arg_base[part] = value
                     i += len(sub_list)
-
         i += 1
-
     if "link" in arg_base:
         link_items = items[:arg_start] if arg_start != -1 else items
         if link_items:

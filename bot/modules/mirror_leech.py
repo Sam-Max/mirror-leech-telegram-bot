@@ -101,7 +101,7 @@ class Mirror(TaskListener):
             "-rcf": "",
             "-au": "",
             "-ap": "",
-            "-h": "",
+            "-h": [],
             "-t": "",
             "-ca": "",
             "-cv": "",
@@ -138,8 +138,11 @@ class Mirror(TaskListener):
         self.folder_name = f"/{args["-m"]}".rstrip("/") if len(args["-m"]) > 0 else ""
         self.bot_trans = args["-bt"]
         self.user_trans = args["-ut"]
+        self.ffmpeg_cmds = args["-ff"]
 
         headers = args["-h"]
+        if headers:
+            headers = headers.split("|")
         is_bulk = args["-b"]
 
         bulk_start = 0
@@ -154,16 +157,6 @@ class Mirror(TaskListener):
             self.multi = int(args["-i"])
         except:
             self.multi = 0
-
-        try:
-            if args["-ff"]:
-                if isinstance(args["-ff"], set):
-                    self.ffmpeg_cmds = args["-ff"]
-                else:
-                    self.ffmpeg_cmds = eval(args["-ff"])
-        except Exception as e:
-            self.ffmpeg_cmds = None
-            LOGGER.error(e)
 
         if not isinstance(self.seed, bool):
             dargs = self.seed.split(":")
@@ -365,8 +358,8 @@ class Mirror(TaskListener):
             pssw = args["-ap"]
             if ussr or pssw:
                 auth = f"{ussr}:{pssw}"
-                headers += (
-                    f" authorization: Basic {b64encode(auth.encode()).decode('ascii')}"
+                headers.extend(
+                    [f"authorization: Basic {b64encode(auth.encode()).decode('ascii')}"]
                 )
             await add_aria2_download(self, path, headers, ratio, seed_time)
 

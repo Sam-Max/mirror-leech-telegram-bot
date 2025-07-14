@@ -1,4 +1,5 @@
 from importlib import import_module
+from ast import literal_eval
 
 
 class Config:
@@ -25,6 +26,8 @@ class Config:
     LEECH_SPLIT_SIZE = 2097152000
     MEDIA_GROUP = False
     HYBRID_LEECH = False
+    HYDRA_IP = ""
+    HYDRA_API_KEY = ""
     NAME_SUBSTITUTE = ""
     OWNER_ID = 0
     QUEUE_ALL = 0
@@ -49,7 +52,7 @@ class Config:
     SUDO_USERS = ""
     TELEGRAM_API = 0
     TELEGRAM_HASH = ""
-    TG_PROXY = None
+    TG_PROXY = {}
     THUMBNAIL_LAYOUT = ""
     TORRENT_TIMEOUT = 0
     UPLOAD_PATHS = {}
@@ -63,12 +66,50 @@ class Config:
     YT_DLP_OPTIONS = {}
 
     @classmethod
+    def _convert(cls, key, value):
+        expected_type = type(getattr(cls, key))
+        if value is None:
+            return None
+        if isinstance(value, expected_type):
+            return value
+
+        if expected_type == bool:
+            return str(value).strip().lower() in {"true", "1", "yes"}
+
+        if expected_type in [list, dict]:
+            if not isinstance(value, str):
+                raise TypeError(
+                    f"{key} should be {expected_type.__name__}, got {type(value).__name__}"
+                )
+
+            if not value:
+                return expected_type()
+
+            try:
+                evaluated = literal_eval(value)
+                if isinstance(evaluated, expected_type):
+                    return evaluated
+                else:
+                    raise TypeError
+            except (ValueError, SyntaxError, TypeError) as e:
+                raise TypeError(
+                    f"{key} should be {expected_type.__name__}, got invalid string: {value}"
+                ) from e
+        try:
+            return expected_type(value)
+        except (ValueError, TypeError) as exc:
+            raise TypeError(
+                f"Invalid type for {key}: expected {expected_type}, got {type(value)}"
+            ) from exc
+
+    @classmethod
     def get(cls, key):
         return getattr(cls, key) if hasattr(cls, key) else None
 
     @classmethod
     def set(cls, key, value):
         if hasattr(cls, key):
+            value = cls._convert(key, value)
             setattr(cls, key, value)
         else:
             raise KeyError(f"{key} is not a valid configuration key.")
@@ -85,10 +126,15 @@ class Config:
     def load(cls):
         settings = import_module("config")
         for attr in dir(settings):
-            if hasattr(cls, attr):
+            if (
+                not attr.startswith("__")
+                and not callable(getattr(settings, attr))
+                and hasattr(cls, attr)
+            ):
                 value = getattr(settings, attr)
                 if not value:
                     continue
+                value = cls._convert(attr, value)
                 if isinstance(value, str):
                     value = value.strip()
                 if attr == "DEFAULT_UPLOAD" and value != "gd":
@@ -119,6 +165,7 @@ class Config:
     def load_dict(cls, config_dict):
         for key, value in config_dict.items():
             if hasattr(cls, key):
+                value = cls._convert(key, value)
                 if key == "DEFAULT_UPLOAD" and value != "gd":
                     value = "rc"
                 elif key in [

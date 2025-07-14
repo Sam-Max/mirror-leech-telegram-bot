@@ -4,8 +4,10 @@ from os import walk, path as ospath
 from secrets import token_urlsafe
 from aioshutil import move, rmtree
 from pyrogram.enums import ChatAction
-from re import sub, I
+from re import sub, I, findall
 from shlex import split
+from collections import Counter
+from copy import deepcopy
 
 from .. import (
     user_data,
@@ -52,6 +54,7 @@ from .telegram_helper.message_utils import (
     send_message,
     send_status_message,
     get_tg_link_message,
+    temp_download,
 )
 
 
@@ -217,23 +220,33 @@ class TaskConfig:
 
         if self.ffmpeg_cmds and not isinstance(self.ffmpeg_cmds, list):
             if self.user_dict.get("FFMPEG_CMDS", None):
-                ffmpeg_dict = self.user_dict["FFMPEG_CMDS"]
-                self.ffmpeg_cmds = [
-                    value
-                    for key in list(self.ffmpeg_cmds)
-                    if key in ffmpeg_dict
-                    for value in ffmpeg_dict[key]
-                ]
+                ffmpeg_dict = deepcopy(self.user_dict["FFMPEG_CMDS"])
             elif "FFMPEG_CMDS" not in self.user_dict and Config.FFMPEG_CMDS:
-                ffmpeg_dict = Config.FFMPEG_CMDS
-                self.ffmpeg_cmds = [
-                    value
-                    for key in list(self.ffmpeg_cmds)
-                    if key in ffmpeg_dict
-                    for value in ffmpeg_dict[key]
-                ]
+                ffmpeg_dict = deepcopy(Config.FFMPEG_CMDS)
             else:
-                self.ffmpeg_cmds = None
+                ffmpeg_dict = None
+            if ffmpeg_dict is None:
+                self.ffmpeg_cmds = ffmpeg_dict
+            else:
+                cmds = []
+                for key in list(self.ffmpeg_cmds):
+                    if isinstance(key, tuple):
+                        cmds.extend(list(key))
+                    elif key in ffmpeg_dict.keys():
+                        for ind, vl in enumerate(ffmpeg_dict[key]):
+                            if variables := set(findall(r"\{(.*?)\}", vl)):
+                                ff_values = (
+                                    self.user_dict.get("FFMPEG_VARIABLES", {})
+                                    .get(key, {})
+                                    .get(str(ind), {})
+                                )
+                                if Counter(list(variables)) == Counter(
+                                    list(ff_values.keys())
+                                ):
+                                    cmds.append(vl.format(**ff_values))
+                            else:
+                                cmds.append(vl)
+                self.ffmpeg_cmds = cmds
 
         if not self.is_leech:
             self.stop_duplicate = (
@@ -308,7 +321,7 @@ class TaskConfig:
             self.up_dest = (
                 self.up_dest
                 or self.user_dict.get("LEECH_DUMP_CHAT")
-                or Config.LEECH_DUMP_CHAT
+                or (Config.LEECH_DUMP_CHAT if "LEECH_DUMP_CHAT" not in self.user_dict else None)
             )
             self.hybrid_leech = TgClient.IS_PREMIUM_USER and (
                 self.user_dict.get("HYBRID_LEECH")
@@ -571,10 +584,10 @@ class TaskConfig:
                 self.multi_tag,
                 self.options,
             ).new_event()
-        except:
+        except Exception as e:
             await send_message(
                 self.message,
-                "Reply to text file or to telegram message that have links seperated by new line!",
+                f"Reply to text file or to telegram message that have links separated by new line! {e}",
             )
 
     async def proceed_extract(self, dl_path, gid):
@@ -595,6 +608,7 @@ class TaskConfig:
 
         if not self.files_to_proceed:
             return dl_path
+        t_path = dl_path
         sevenz = SevenZ(self)
         LOGGER.info(f"Extracting: {self.name}")
         async with task_dict_lock:
@@ -628,10 +642,13 @@ class TaskConfig:
                             await remove(del_path)
                         except:
                             self.is_cancelled = True
+        if self.proceed_count == 0:
+            LOGGER.info("No files able to extract!")
         return t_path if self.is_file and code == 0 else dl_path
 
     async def proceed_ffmpeg(self, dl_path, gid):
         checked = False
+        inputs = {}
         cmds = [
             [part.strip() for part in split(item) if part.strip()]
             for item in self.ffmpeg_cmds
@@ -653,8 +670,13 @@ class TaskConfig:
                     delete_files = True
                 else:
                     delete_files = False
-                index = cmd.index("-i")
-                input_file = cmd[index + 1]
+                input_indexes = [
+                    index for index, value in enumerate(cmd) if value == "-i"
+                ]
+                for index in input_indexes:
+                    if cmd[index + 1].startswith("mltb"):
+                        input_file = cmd[index + 1]
+                        break
                 if input_file.strip().endswith(".video"):
                     ext = "video"
                 elif input_file.strip().endswith(".audio"):
@@ -692,7 +714,14 @@ class TaskConfig:
                         await cpu_eater_lock.acquire()
                         self.progress = True
                     LOGGER.info(f"Running ffmpeg cmd for: {file_path}")
-                    cmd[index + 1] = file_path
+                    for index in input_indexes:
+                        if cmd[index + 1].startswith("mltb"):
+                            cmd[index + 1] = file_path
+                        elif is_telegram_link(cmd[index + 1]):
+                            msg = (await get_tg_link_message(cmd[index + 1]))[0]
+                            file_dir = await temp_download(msg)
+                            inputs[index + 1] = file_dir
+                            cmd[index + 1] = file_dir
                     self.subsize = self.size
                     res = await ffmpeg.ffmpeg_cmds(cmd, file_path)
                     if res:
@@ -760,6 +789,9 @@ class TaskConfig:
                                         newname = file_name.split(".", 1)[-1]
                                         newres = ospath.join(dirpath, newname)
                                         await move(res[0], newres)
+                for inp in inputs.values():
+                    if "/temp/" in inp and aiopath.exists(inp):
+                        await remove(inp)
         finally:
             if checked:
                 cpu_eater_lock.release()

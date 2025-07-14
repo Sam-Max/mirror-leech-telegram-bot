@@ -115,17 +115,17 @@ async def get_buttons(key=None, edit_type=None):
             buttons.data_button("Default", f"botset resetnzb {key}")
             buttons.data_button("Empty String", f"botset emptynzb {key}")
             buttons.data_button("Close", "botset close")
-            msg = f"Send a valid value for {key}. Current value is '{nzb_options[key]}'.\nIf the value is list then seperate them by space or ,\nExample: .exe,info or .exe .info\nTimeout: 60 sec"
+            msg = f"Send a valid value for {key}. Current value is '{nzb_options[key]}'.\nIf the value is list then separate them by space or ,\nExample: .exe,info or .exe .info\nTimeout: 60 sec"
         elif edit_type.startswith("nzbsevar"):
             index = 0 if key == "newser" else int(edit_type.replace("nzbsevar", ""))
-            buttons.data_button("Back", f"botset nzbser{index}")
-            if key != "newser":
-                buttons.data_button("Empty", f"botset emptyserkey {index} {key}")
-            buttons.data_button("Close", "botset close")
             if key == "newser":
+                buttons.data_button("Back", "botset nzbserver")
                 msg = "Send one server as dictionary {}, like in config.py without []. Timeout: 60 sec"
             else:
+                buttons.data_button("Empty", f"botset emptyserkey {index} {key}")
+                buttons.data_button("Back", f"botset nzbser{index}")
                 msg = f"Send a valid value for {key} in server {Config.USENET_SERVERS[index]['name']}. Current value is {Config.USENET_SERVERS[index][key]}. Timeout: 60 sec"
+            buttons.data_button("Close", "botset close")
     elif key == "var":
         conf_dict = Config.get_all()
         for k in list(conf_dict.keys())[start : 10 + start]:
@@ -281,9 +281,9 @@ async def edit_variable(_, message, pre_message, key):
             drives_ids.insert(0, value)
     elif key == "INDEX_URL":
         if drives_names and drives_names[0] == "Main":
-            index_urls[0] = value
+            index_urls[0] = value.strip("/")
         else:
-            index_urls.insert(0, value)
+            index_urls.insert(0, value.strip("/"))
     elif key == "AUTHORIZED_CHATS":
         aid = value.split()
         auth_chats.clear()
@@ -488,7 +488,7 @@ async def update_private_file(_, message, pre_message):
                     drives_ids.append(temp[1])
                     drives_names.append(temp[0].replace("_", " "))
                     if len(temp) > 2:
-                        index_urls.append(temp[2])
+                        index_urls.append(temp[2].strip("/"))
                     else:
                         index_urls.append("")
         elif file_name in [".netrc", "netrc"]:
@@ -770,7 +770,11 @@ async def edit_bot_settings(client, query):
         await query.answer()
         await update_buttons(message, data[2], data[1])
         pfunc = partial(edit_nzb_server, pre_message=message, key=data[2], index=index)
-        rfunc = partial(update_buttons, message, data[1])
+        rfunc = partial(
+            update_buttons,
+            message,
+            f"nzbser{index}" if data[2] != "newser" else "nzbserver",
+        )
         await event_handler(client, query, pfunc, rfunc)
     elif data[1].startswith("nzbsevar") and state == "view":
         index = int(data[1].replace("nzbsevar", ""))

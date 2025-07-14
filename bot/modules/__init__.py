@@ -23,10 +23,10 @@ from .restart import (
     restart_bot,
     restart_notification,
     confirm_restart,
-    restart_sessions,
 )
 from .rss import get_rss_menu, rss_listener
 from .search import torrent_search, torrent_search_update, initiate_search_tools
+from .nzb_search import hydra_search
 from .services import start, ping, log
 from .shell import run_shell
 from .stats import bot_stats, get_packages_version
@@ -48,6 +48,7 @@ __all__ = [
     "clone_node",
     "aioexecute",
     "execute",
+    "hydra_search",
     "clear",
     "select",
     "confirm_selection",
@@ -68,7 +69,6 @@ __all__ = [
     "restart_bot",
     "restart_notification",
     "confirm_restart",
-    "restart_sessions",
     "get_rss_menu",
     "rss_listener",
     "torrent_search",
