@@ -36,8 +36,10 @@ basicConfig(
 
 LOGGER = getLogger(__name__)
 cpu_no = cpu_count()
+threads = max(1, cpu_no // 2)
+cores = ",".join(str(i) for i in reversed(range(threads)))
 
-DOWNLOAD_DIR = "/usr/src/app/downloads/"
+DOWNLOAD_DIR = "/app/downloads/"
 intervals = {"status": {}, "qb": "", "jd": "", "nzb": "", "stopAll": False}
 qb_torrents = {}
 jd_downloads = {}
@@ -53,6 +55,7 @@ task_dict = {}
 rss_dict = {}
 auth_chats = {}
 excluded_extensions = ["aria2", "!qB"]
+included_extensions = []
 drives_names = []
 drives_ids = []
 index_urls = []

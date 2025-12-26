@@ -13,6 +13,7 @@ from .. import (
     index_urls,
     user_data,
     excluded_extensions,
+    included_extensions,
     LOGGER,
     rss_dict,
     sabnzbd_client,
@@ -21,7 +22,7 @@ from .. import (
 )
 from ..helper.ext_utils.db_handler import database
 from .config_manager import Config
-from .mltb_client import TgClient
+from .telegram_manager import TgClient
 from .torrent_manager import TorrentManager
 
 
@@ -216,6 +217,12 @@ async def update_variables():
         for x in fx:
             x = x.lstrip(".")
             excluded_extensions.append(x.strip().lower())
+
+    if Config.INCLUDED_EXTENSIONS:
+        fx = Config.INCLUDED_EXTENSIONS.split()
+        for x in fx:
+            x = x.lstrip(".")
+            included_extensions.append(x.strip().lower())
 
     if Config.GDRIVE_ID:
         drives_names.append("Main")
