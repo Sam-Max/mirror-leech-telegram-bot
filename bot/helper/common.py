@@ -700,9 +700,6 @@ class TaskConfig:
             for ffmpeg_cmd in cmds:
                 self.proceed_count = 0
                 cmd = [
-                    "taskset",
-                    "-c",
-                    f"{cores}",
                     "ffmpeg",
                     "-hide_banner",
                     "-loglevel",
