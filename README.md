@@ -374,6 +374,7 @@ see [Using Service Accounts](https://github.com/anasty17/mirror-leech-telegram-b
 **6. Leech**
 
 - `LEECH_SPLIT_SIZE` (`Int`): Size of split in bytes. Default is `2GB`. Default is `4GB` if your account is premium.
+
 - `AS_DOCUMENT` (`Bool`): Default type of Telegram file upload. Default is `False` mean as media.
 
 - `EQUAL_SPLITS` (`Bool`): Split files larger than **LEECH_SPLIT_SIZE** into equal parts size (Not working with zip cmd). Default is `False`.
@@ -386,9 +387,13 @@ see [Using Service Accounts](https://github.com/anasty17/mirror-leech-telegram-b
 
 - `LEECH_FILENAME_PREFIX` (`Str`): Add custom word to leeched file name.
 
-- `LEECH_DUMP_CHAT` (`Int`|`Str`): ID or USERNAME or PM(private message) to where files would be uploaded. Add `-100` before channel/superGroup id. To use only specific topic write it in this format `chat_id|thread_id`. Ex:-100XXXXXXXXXXX or -100XXXXXXXXXXX|10 or pm or @xxxxxxx or @xxxxxxx|10.
+- `LEECH_DUMP_CHAT` (`Int`|`Str`): ID or USERNAME or PM(private message) to where files would be uploaded. Add `-100` before channel/superGroup id. To use only specific topic write it in this format `chat_id|thread_id`. Ex: -100XXXXXXXXXXX or "-100XXXXXXXXXXX|10" or "pm" or "@xxxxxxx" or "@xxxxxxx|10".
+
+- `CLONE_DUMP_CHATS` (`List`|`Int`|`Str`): LIST of ID|USERNAME or ID or USERNAME or PM(private message) to where files would be cloned. Add `-100` before channel/superGroup id. To use only specific topic write it in this format `chat_id|thread_id`. Ex: ["pm", -100xxxx555, "@username", "@username|8", "-100xxx8886|2"] or -100xxx5555 or "-100xx555566|6" or "@username" or "pm". **Note**: Add `chat_id` inside `quotation marks` only if you will add thread_id with it.
 
 - `THUMBNAIL_LAYOUT` (`Str`): Thumbnail layout (widthxheight, 2x2, 3x3, 2x4, 4x4, ...) of how many photo arranged for the thumbnail.
+
+- `FILES_LINKS` (`Bool`): Enable files link after leech complete, those link(s) will be sent in the same chat where you sent the leech cmd. Default is `False`.
 
 **7. qBittorrent/Aria2c/Sabnzbd**
 

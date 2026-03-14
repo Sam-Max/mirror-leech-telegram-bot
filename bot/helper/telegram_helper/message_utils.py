@@ -23,7 +23,7 @@ async def send_message(message, text, buttons=None, block=True):
         if not block:
             return str(f)
         await sleep(f.value * 1.2)
-        return await send_message(message, text, buttons)
+        return await send_message(message, text, buttons, block)
     except Exception as e:
         LOGGER.error(str(e))
         return str(e)
@@ -40,7 +40,7 @@ async def edit_message(message, text, buttons=None, block=True):
         if not block:
             return str(f)
         await sleep(f.value * 1.2)
-        return await edit_message(message, text, buttons)
+        return await edit_message(message, text, buttons, block)
     except Exception as e:
         LOGGER.error(str(e))
         return str(e)
@@ -72,7 +72,7 @@ async def send_rss(text, chat_id, thread_id):
     except (FloodWait, FloodPremiumWait) as f:
         LOGGER.warning(str(f))
         await sleep(f.value * 1.2)
-        return await send_rss(text)
+        return await send_rss(text, chat_id, thread_id)
     except Exception as e:
         LOGGER.error(str(e))
         return str(e)
@@ -109,7 +109,8 @@ async def get_tg_link_message(link):
     if link.startswith("https://t.me/"):
         private = False
         msg = re_match(
-            r"https:\/\/t\.me\/(?:c\/)?([^\/]+)(?:\/[^\/]+)?\/([0-9-]+)", link
+            r"https:\/\/t\.me\/(?:c\/)?([^\/]+)\/(?:\d+\/)*([0-9-]+)",
+            link,
         )
     else:
         private = True
@@ -118,7 +119,8 @@ async def get_tg_link_message(link):
         )
         if not TgClient.user:
             raise TgLinkException("USER_SESSION_STRING required for this private link!")
-
+    if not msg:
+        raise TgLinkException("Wrong link format!")
     chat = msg[1]
     msg_id = msg[2]
     if "-" in msg_id:
@@ -167,8 +169,10 @@ async def get_tg_link_message(link):
             ) from e
         if not user_message.empty:
             return (links, "user") if links else (user_message, "user")
+        else:
+            raise TgLinkException("Private: Can't get this message!")
     else:
-        raise TgLinkException("Private: Please report!")
+        raise TgLinkException("Private: Can't get this message!")
 
 
 async def temp_download(msg):

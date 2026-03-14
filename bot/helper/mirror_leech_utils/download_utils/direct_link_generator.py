@@ -7,7 +7,7 @@ from os import path as ospath
 from re import findall, match, search
 from requests import Session, post, get
 from requests.adapters import HTTPAdapter
-from time import sleep
+from time import sleep, time
 from urllib.parse import parse_qs, urlparse, quote
 from urllib3.util.retry import Retry
 from uuid import uuid4
@@ -230,10 +230,11 @@ def get_captcha_token(session, params):
     if token := findall(r'"rresp","(.*?)"', res.text):
         return token[0]
 
+
 def transfer_it(url):
-    resp = post('https://transfer-it-henna.vercel.app/post',json={'url': url})
+    resp = post("https://transfer-it-henna.vercel.app/post", json={"url": url})
     if resp.status_code == 200:
-        return resp.json()['url']
+        return resp.json()["url"]
     else:
         raise DirectDownloadLinkException("ERROR: File Expired or File Not Found")
 
@@ -442,6 +443,7 @@ def mediafile(url):
     except Exception as e:
         raise DirectDownloadLinkException(f"ERROR: {str(e)}") from e
 
+
 def mediafire(url, session=None):
     if "/folder/" in url:
         return mediafireFolder(url)
@@ -502,7 +504,8 @@ def mediafire(url, session=None):
         return mediafire(final_url, session)
     session.close()
     return final_link[0]
-    
+
+
 def osdn(url):
     with create_scraper() as session:
         try:
@@ -781,29 +784,36 @@ def uploadee(url):
 
 
 def terabox(url):
+    
     if "/file/" in url:
         return url
-    api_url = f"https://wdzone-terabox-api.vercel.app/api?url={quote(url)}"
+    
+    api_url = "https://teraboxdl.site/api/proxy"
+    headers = {"Referer": "https://teraboxdl.site/", "User-Agent": user_agent}
+    payload = {"url": url}
+
     try:
         with Session() as session:
-            req = session.get(api_url, headers={"User-Agent": user_agent}).json()
+            req = session.post(api_url, json=payload, headers=headers, timeout=30).json()
     except Exception as e:
         raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from e
 
     details = {"contents": [], "title": "", "total_size": 0}
-    if "✅ Status" not in req:
+
+    if req.get("errno") != 0 or not req.get("list"):
         raise DirectDownloadLinkException("ERROR: File not found!")
-    for data in req["📜 Extracted Info"]:
+
+    for data in req["list"]:
         item = {
-            "path": "",
-            "filename": data["📂 Title"],
-            "url": data["🔽 Direct Download Link"],
+            "path": data.get("path", ""),
+            "filename": data["server_filename"],
+            "url": data["direct_link"],
         }
         details["contents"].append(item)
-        size = (data["📏 Size"]).replace(" ", "")
-        size = speed_string_to_bytes(size)
-        details["total_size"] += size
-    details["title"] = req["📜 Extracted Info"][0]["📂 Title"]
+        details["total_size"] += data.get("size", 0)
+
+    details["title"] = req["list"][0]["server_filename"]
+
     if len(details["contents"]) == 1:
         return details["contents"][0]["url"]
     return details
@@ -1097,13 +1107,17 @@ def gofile(url):
 
     def __fetch_links(session, _id, folderPath=""):
         _url = f"https://api.gofile.io/contents/{_id}?cache=true"
+        time_slot = int(time()) // 14400
+        raw = f"{user_agent}::en-US::{token}::{time_slot}::gf2026x"
+        wt = sha256(raw.encode()).hexdigest()
         headers = {
             "User-Agent": user_agent,
             "Accept-Encoding": "gzip, deflate, br",
             "Accept": "*/*",
             "Connection": "keep-alive",
             "Authorization": "Bearer" + " " + token,
-            "X-Website-Token" : "4fd6sg89d7s6"
+            "X-Website-Token": wt,
+            "X-BL": "en-US"
         }
         if _password:
             _url += f"&password={_password}"
@@ -1169,6 +1183,7 @@ def gofile(url):
     if len(details["contents"]) == 1:
         return (details["contents"][0]["url"], details["header"])
     return details
+
 
 def mediafireFolder(url):
     if "::" in url:
@@ -1257,12 +1272,12 @@ def mediafireFolder(url):
         except:
             return None
         return final_link
-    
+
     def __decode_url(html):
         enc_url = html.xpath('//a[@id="downloadButton"]')
         if enc_url:
-            final_link = enc_url[0].attrib.get('href')
-            scrambled = enc_url[0].attrib.get('data-scrambled-url')
+            final_link = enc_url[0].attrib.get("href")
+            scrambled = enc_url[0].attrib.get("data-scrambled-url")
             if final_link and scrambled:
                 try:
                     final_link = b64decode(scrambled).decode("utf-8")
