@@ -93,6 +93,7 @@ class TaskConfig:
         self.is_jd = False
         self.is_clone = False
         self.is_ytdlp = False
+        self.is_gallerydl = False
         self.equal_splits = False
         self.user_transmission = False
         self.hybrid_leech = False
@@ -119,7 +120,7 @@ class TaskConfig:
         self.is_file = False
         self.bot_trans = False
         self.user_trans = False
-        self.is_rss = False
+        self.is_rss = getattr(self.message, "_rss_trigger", False)
         self.progress = True
         self.ffmpeg_cmds = None
         self.chat_thread_id = None
@@ -210,12 +211,12 @@ class TaskConfig:
                         self.link = f"mtp:{self.link}"
                     await self.is_token_exists(self.link, "dl")
         elif self.link == "rcl":
-            if not self.is_ytdlp and not self.is_jd:
+            if not self.is_ytdlp and not self.is_jd and not self.is_gallerydl:
                 self.link = await RcloneList(self).get_rclone_path("rcd")
                 if not is_rclone_path(self.link):
                     raise ValueError(self.link)
         elif self.link == "gdl":
-            if not self.is_ytdlp and not self.is_jd:
+            if not self.is_ytdlp and not self.is_jd and not self.is_gallerydl:
                 self.link = await GoogleDriveList(self).get_target_id("gdd")
                 if not is_gdrive_id(self.link):
                     raise ValueError(self.link)
@@ -541,21 +542,6 @@ class TaskConfig:
                 )
 
     async def get_tag(self, text: list):
-        if len(text) > 1 and text[1].startswith("Tag: "):
-            self.is_rss = True
-            user_info = text[1].split("Tag: ")
-            if len(user_info) >= 3:
-                id_ = user_info[-1]
-                self.tag = " ".join(user_info[:-1])
-            else:
-                self.tag, id_ = text[1].split("Tag: ")[1].split()
-            self.user = self.message.from_user = await self.client.get_users(int(id_))
-            self.user_id = self.user.id
-            self.user_dict = user_data.get(self.user_id, {})
-            try:
-                await self.message.unpin()
-            except:
-                pass
         if self.user:
             if username := self.user.username:
                 self.tag = f"@{username}"
@@ -704,7 +690,6 @@ class TaskConfig:
                     or is_archive(file_)
                     and not file_.strip().lower().endswith(".rar")
                 ):
-
                     self.proceed_count += 1
                     f_path = ospath.join(dirpath, file_)
                     t_path = get_base_name(f_path) if self.is_file else dirpath

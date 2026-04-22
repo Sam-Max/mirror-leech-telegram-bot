@@ -117,6 +117,15 @@ programming in Python.
 </details>
 
 <details>
+  <summary><h5>Gallery-dl</h5></summary>
+
+- Mirror and leech from gallery-dl supported sites
+- Supports custom gallery-dl options globally, per user, and per task
+- Supports cookies and config files for authenticated or advanced downloads
+
+</details>
+
+<details>
   <summary><h5>JDownloader</h5></summary>
 
 - Synchronize Settings (global option)
@@ -279,6 +288,8 @@ Fill up rest of the fields. Meaning of each field is discussed below.
 
 - `DATABASE_URL` (`Str`): Your Mongo Database URL (Connection string). Follow this [Create Database](https://github.com/anasty17/test?tab=readme-ov-file#create-database) to create database. Data will be saved in Database: bot settings, users settings, rss data and incomplete tasks. **NOTE**: You can always edit all settings that saved in database from the official site -> (Browse collections). 
 
+- `DATABASE_NAME` (`Str`): Name of the Mongo database. Default is `mltb`.
+
 - `CMD_SUFFIX` (`Str`|`Int`): Commands index number. This number will added at the end all commands.
 
 - `AUTHORIZED_CHATS` (`Str`): Fill user_id and chat_id of groups/users you want to authorize. To auth only specific topic(s) write it in this format `chat_id|thread_id` Ex:-100XXXXXXXXXXX or -100XXXXXXXXXXX|10 or -100XXXXXXXXXXX|10|12. Separate them by spaces.
@@ -309,6 +320,8 @@ from [Streamwish](https://streamwish.com/?op=my_account).
 - `YT_DLP_OPTIONS` (`Dict`): Dict of yt-dlp options. Check all possible
 options [HERE](https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/YoutubeDL.py#L184) or use this [script](https://t.me/mltb_official_channel/177) to convert cli arguments to api options. Format: {key: value, key: value, key: value}.
   - Example: {"format": "bv*+mergeall[vcodec=none]", "nocheckcertificate": True, "playliststart": 10, "fragment_retries": float("inf"), "matchtitle": "S13", "writesubtitles": True, "live_from_start": True, "postprocessor_args": {"ffmpeg": ["-threads", "4"]}, "wait_for_video": (5, 100), "download_ranges": [{"start_time": 0, "end_time": 10}]}
+
+- `GALLERY_DL_OPTIONS` (`Dict`): Dict of gallery-dl options. Supports custom gallery-dl options globally, per user, and per task. Format: {key: value, key: value}.
 
 - `USE_SERVICE_ACCOUNTS` (`Bool`): Whether to use Service Accounts or not, with google-api-python-client. For this to work
 see [Using Service Accounts](https://github.com/anasty17/mirror-leech-telegram-bot#generate-service-accounts-what-is-service-account) section below. Default is `False`.
@@ -373,7 +386,7 @@ see [Using Service Accounts](https://github.com/anasty17/mirror-leech-telegram-b
 
 **6. Leech**
 
-- `LEECH_SPLIT_SIZE` (`Int`): Size of split in bytes. Default is `2GB`. Default is `4GB` if your account is premium.
+- `LEECH_SPLIT_SIZE` (`Int`): Size of split in bytes. Default is `~2GB` (2000 MiB). Default is `~4GB` (4000 MiB) if your account is premium.
 
 - `AS_DOCUMENT` (`Bool`): Default type of Telegram file upload. Default is `False` mean as media.
 
@@ -430,8 +443,9 @@ see [Using Service Accounts](https://github.com/anasty17/mirror-leech-telegram-b
 
 - `RSS_SIZE_LIMIT` (`INT`): Item size limit in bytes. Default is `0`.
 
-- `RSS_CHAT` (`Int`|`Str`): Chat `ID or USERNAME or ID|TOPIC_ID or USERNAME|TOPIC_ID` where rss links will be sent. If you want message to be sent to the channel then add channel id. Add `-100` before channel id.
-    - **RSS NOTES**: `RSS_CHAT` is required, otherwise monitor will not work. You must use `USER_STRING_SESSION` --OR-- *CHANNEL*. If using channel then bot should be added in both channel and group(linked to channel) and `RSS_CHAT` is the channel id, so messages sent by the bot to channel will be forwarded to group. Otherwise with `USER_STRING_SESSION` add group id for `RSS_CHAT`. If `DATABASE_URL` not added you will miss the feeds while bot offline.
+- `RSS_CHAT`: The RSS monitor requires a chat to post results and notifications. The bot must be a member of this chat. When a command is configured for a subscription (e.g., `-c ql -doc`), downloads start automatically and results are posted here. Without a command, only feed info (name, link, size) is posted.
+    - **Setup**: Run `/rss` in the desired chat and click **Use This Chat** (sudo only). This auto-detects the chat ID and topic. For channels, set the chat ID manually via config/env/bot settings using the format: `ID or USERNAME or ID|TOPIC_ID or USERNAME|TOPIC_ID`.
+    - **Note**: Without `DATABASE_URL`, feeds received while the bot is offline will be missed.
 
 **11. Queue System**
 
@@ -602,11 +616,13 @@ qbmirror - or /qm Mirror torrent using qBittorrent
 jdmirror - or /jm Mirror using jdownloader
 nzbmirror - or /nm Mirror using sabnzbd
 ytdl - or /y Mirror yt-dlp supported links
+gallerydl - or /gdl Mirror using gallery-dl
 leech - or /l Upload to telegram
 qbleech - or /ql Leech torrent using qBittorrent
 jdleech - or /jl Leech using jdownloader
 nzbleech - or /nl Leech using sabnzbd
 ytdlleech - or /yl Leech yt-dlp supported links
+gallerydlleech - or /gdlleech Leech using gallery-dl
 clone - Copy file/folder to Drive
 count - Count file/folder from GDrive
 usetting - or /us User settings
@@ -616,6 +632,7 @@ sel - Select files from torrent
 rss - Rss menu
 list - Search files in Drive
 search - Search for torrents with API
+nzbsearch - Search for NZBs
 cancel - or /c Cancel a task
 cancelall - Cancel all tasks
 forcestart - or /fs to start task from queue
@@ -623,11 +640,14 @@ del - Delete file/folder from GDrive
 log - Get the Bot Log
 auth - Authorize user or chat
 unauth - Unauthorize uer or chat
+addsudo - Add sudo user
+rmsudo - Remove sudo user
+users - Show users settings
 shell - Run commands in Shell
 aexec - Execute async function
 exec - Execute sync function
+clearlocals - Clear exec locals
 restart - Restart the Bot
-restartses - Restart Telegram Session(s)
 stats - Bot Usage Stats
 ping - Ping the Bot
 help - All cmds with description
@@ -738,7 +758,7 @@ python3 generate_drive_token.py
 <details>
   <summary><h3>Aria2c</h3></summary>
 
-- Global options: `--seed-ratio` (0 means no limit) and `--seed-time` (0 means no seed) in aria.sh.
+- Global options: `--seed-ratio` (0 means no limit) in aria-nox-nzb.sh.
 
 ------
 
@@ -748,7 +768,7 @@ python3 generate_drive_token.py
 <details>
   <summary><h5>Using Service Accounts for uploading to avoid user rate limit</h5></summary>
 
-> For Service Account to work, you must set `USE_SERVICE_ACCOUNTS` = "True" in config file or environment variables.
+> For Service Account to work, you must set `USE_SERVICE_ACCOUNTS` = `True` in config file or environment variables.
 > **NOTE**: Using Service Accounts is only recommended while uploading to a Team Drive.
 
 <details>
