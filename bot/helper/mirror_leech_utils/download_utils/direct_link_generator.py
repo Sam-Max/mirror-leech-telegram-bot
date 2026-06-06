@@ -18,6 +18,7 @@ from ...ext_utils.exceptions import DirectDownloadLinkException
 from ...ext_utils.help_messages import PASSWORD_ERROR_MESSAGE
 from ...ext_utils.links_utils import is_share_link
 from ...ext_utils.status_utils import speed_string_to_bytes
+from .url_shortener_bypass import bypass_shortener, is_url_shortener
 
 user_agent = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:122.0) Gecko/20100101 Firefox/122.0"
@@ -29,6 +30,14 @@ def direct_link_generator(link):
     domain = urlparse(link).hostname
     if not domain:
         raise DirectDownloadLinkException("ERROR: Invalid URL")
+    elif is_url_shortener(domain):
+        resolved = bypass_shortener(link)
+        try:
+            return direct_link_generator(resolved)
+        except DirectDownloadLinkException as e:
+            if str(e).startswith("ERROR: No Direct link function found"):
+                return resolved
+            raise
     elif "yadi.sk" in link or "disk.yandex." in link:
         return yandex_disk(link)
     elif "buzzheavier.com" in domain:
@@ -614,10 +623,10 @@ def pixeldrain(url):
     try:
         url = url.rstrip("/")
         code = url.split("/")[-1].split("?", 1)[0]
-        response = get("https://pd.cybar.xyz/", allow_redirects=True)
+        response = get("https://cdn.pixeldrain.eu.cc/", allow_redirects=True)
         return response.url + code
     except Exception as e:
-        raise DirectDownloadLinkException("ERROR: Direct link not found")
+        raise DirectDownloadLinkException("ERROR: Direct link not found") from e
 
 
 def streamtape(url):
@@ -789,12 +798,26 @@ def terabox(url):
         return url
 
     COOKIE_DOMAINS = (
-        "terabox", "1024tera", "freeterabox", "nephobox", "4funbox",
-        "mirrobox", "momerybox", "gibibox", "goaibox", "teraboxapp",
-        "terasharelink", "teraboxlink", "teraboxshare", "terafileshare",
+        "terabox",
+        "1024tera",
+        "freeterabox",
+        "nephobox",
+        "4funbox",
+        "mirrobox",
+        "momerybox",
+        "gibibox",
+        "goaibox",
+        "teraboxapp",
+        "terasharelink",
+        "teraboxlink",
+        "teraboxshare",
+        "terafileshare",
     )
     API_PARAMS = {
-        "app_id": "250528", "web": "1", "channel": "dubox", "clienttype": "0",
+        "app_id": "250528",
+        "web": "1",
+        "channel": "dubox",
+        "clienttype": "0",
     }
 
     def __load_cookies():
@@ -806,15 +829,14 @@ def terabox(url):
                 for line in f:
                     line = line.rstrip("\r\n")
                     if line.startswith("#HttpOnly_"):
-                        line = line[len("#HttpOnly_"):]
+                        line = line[len("#HttpOnly_") :]
                     if not line or line.startswith("#"):
                         continue
                     parts = line.split("\t")
                     if len(parts) < 7:
                         continue
-                    if not any(k in parts[0].lower() for k in COOKIE_DOMAINS):
-                        continue
-                    cookies[parts[5]] = parts[6]
+                    if any(k in parts[0].lower() for k in COOKIE_DOMAINS):
+                        cookies[parts[5]] = parts[6]
         except Exception:
             return None
         if not cookies.get("BDUSS") and not cookies.get("ndus"):
@@ -842,22 +864,22 @@ def terabox(url):
         try:
             resp = session.get(
                 f"https://www.terabox.com/sharing/link?surl={surl}",
-                timeout=30, allow_redirects=True,
+                timeout=30,
+                allow_redirects=True,
             )
         except Exception as e:
-            raise DirectDownloadLinkException(
-                f"ERROR: {e.__class__.__name__}"
-            ) from e
+            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from e
         html_text = resp.text
-        m = search(r'fn%28%22([0-9A-F]+)%22%29', html_text) or \
-            search(r'fn\("([0-9A-F]+)"\)', html_text)
+        m = search(r"fn%28%22([0-9A-F]+)%22%29", html_text) or search(
+            r'fn\("([0-9A-F]+)"\)', html_text
+        )
         if not m:
             raise DirectDownloadLinkException(
                 "ERROR: jsToken not found (login expired?)"
             )
         js_token = m.group(1)
         pcf = search(r'pcftoken["\']?\s*[:=]\s*["\']([0-9a-f]+)', html_text)
-        pcftoken = pcf.group(1) if pcf else "0"
+        pcftoken = pcf[1] if pcf else "0"
         if password:
             try:
                 v = session.post(
@@ -879,12 +901,19 @@ def terabox(url):
                 ) from e
         return js_token, pcftoken
 
-    def __share_list(session, surl, js_token, pcftoken, *, dir_path=None,
-                     root=False, page=1, num=200):
+    def __share_list(
+        session, surl, js_token, pcftoken, *, dir_path=None, root=False, page=1, num=200
+    ):
         params = {
-            **API_PARAMS, "jsToken": js_token, "pcftoken": pcftoken,
-            "shorturl": surl, "page": str(page), "num": str(num),
-            "by": "name", "order": "asc", "scene": "",
+            **API_PARAMS,
+            "jsToken": js_token,
+            "pcftoken": pcftoken,
+            "shorturl": surl,
+            "page": str(page),
+            "num": str(num),
+            "by": "name",
+            "order": "asc",
+            "scene": "",
         }
         if root:
             params["root"] = "1"
@@ -893,12 +922,11 @@ def terabox(url):
         try:
             data = session.get(
                 "https://dm.terabox.com/share/list",
-                params=params, timeout=30,
+                params=params,
+                timeout=30,
             ).json()
         except Exception as e:
-            raise DirectDownloadLinkException(
-                f"ERROR: {e.__class__.__name__}"
-            ) from e
+            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from e
         if data.get("errno") not in (0, None):
             raise DirectDownloadLinkException(
                 f"ERROR: share/list errno={data.get('errno')}"
@@ -910,16 +938,17 @@ def terabox(url):
             data = session.get(
                 "https://www.terabox.com/api/shorturlinfo",
                 params={
-                    **API_PARAMS, "jsToken": js_token,
-                    "shorturl": "1" + surl, "root": "1",
-                    "page": "1", "num": "20",
+                    **API_PARAMS,
+                    "jsToken": js_token,
+                    "shorturl": f"1{surl}",
+                    "root": "1",
+                    "page": "1",
+                    "num": "20",
                 },
                 timeout=30,
             ).json()
         except Exception as e:
-            raise DirectDownloadLinkException(
-                f"ERROR: {e.__class__.__name__}"
-            ) from e
+            raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from e
         if data.get("errno") not in (0, None):
             raise DirectDownloadLinkException(
                 f"ERROR: shorturlinfo errno={data.get('errno')}"
@@ -933,7 +962,8 @@ def terabox(url):
                 data = session.post(
                     "https://www.terabox.com/share/download",
                     params={
-                        **API_PARAMS, "jsToken": js_token,
+                        **API_PARAMS,
+                        "jsToken": js_token,
                         "sign": meta["sign"],
                         "timestamp": str(meta["timestamp"]),
                     },
@@ -941,7 +971,7 @@ def terabox(url):
                         "shareid": str(meta["shareid"]),
                         "uk": str(meta["uk"]),
                         "product": "share",
-                        "fid_list": "[" + str(fid) + "]",
+                        "fid_list": f"[{str(fid)}]",
                         "primaryid": str(meta["shareid"]),
                         "type": "nolimit",
                     },
@@ -964,12 +994,14 @@ def terabox(url):
         surl, password = __parse_share(url)
         session = Session()
         session.cookies.update(cookies)
-        session.headers.update({
-            "User-Agent": user_agent,
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Referer": f"https://www.terabox.com/sharing/link?surl={surl}",
-        })
+        session.headers.update(
+            {
+                "User-Agent": user_agent,
+                "Accept": "application/json, text/plain, */*",
+                "Accept-Language": "en-US,en;q=0.9",
+                "Referer": f"https://www.terabox.com/sharing/link?surl={surl}",
+            }
+        )
         js_token, pcftoken = __bootstrap(session, surl, password)
         info = __shorturlinfo(session, surl, js_token)
         meta = {
@@ -985,8 +1017,14 @@ def terabox(url):
             page = 1
             while True:
                 data = __share_list(
-                    session, surl, js_token, pcftoken,
-                    dir_path=dir_path, root=root, page=page, num=200,
+                    session,
+                    surl,
+                    js_token,
+                    pcftoken,
+                    dir_path=dir_path,
+                    root=root,
+                    page=page,
+                    num=200,
                 )
                 if root and page == 1 and not details["title"]:
                     details["title"] = (data.get("title") or surl).lstrip("/")
@@ -1022,8 +1060,11 @@ def terabox(url):
             for fid, idx in pending:
                 if fid in resolved:
                     details["contents"][idx]["url"] = resolved[fid]
-            missing = [details["contents"][idx]["filename"]
-                       for fid, idx in pending if fid not in resolved]
+            missing = [
+                details["contents"][idx]["filename"]
+                for fid, idx in pending
+                if fid not in resolved
+            ]
             if missing:
                 raise DirectDownloadLinkException(
                     f"ERROR: failed to resolve dlink for {len(missing)} "
@@ -1031,9 +1072,7 @@ def terabox(url):
                 )
 
         if not details["contents"]:
-            raise DirectDownloadLinkException(
-                "ERROR: Empty share or invalid cookies"
-            )
+            raise DirectDownloadLinkException("ERROR: Empty share or invalid cookies")
         if not details["title"]:
             details["title"] = details["contents"][0]["filename"]
 
@@ -1062,7 +1101,9 @@ def terabox(url):
 
     try:
         with Session() as session:
-            req = session.post(api_url, json=payload, headers=headers, timeout=30).json()
+            req = session.post(
+                api_url, json=payload, headers=headers, timeout=30
+            ).json()
     except Exception as e:
         raise DirectDownloadLinkException(f"ERROR: {e.__class__.__name__}") from e
 
@@ -1085,7 +1126,6 @@ def terabox(url):
     if len(details["contents"]) == 1:
         return details["contents"][0]["url"]
     return details
-
 
 
 def filepress(url):
@@ -1386,7 +1426,7 @@ def gofile(url):
             "Connection": "keep-alive",
             "Authorization": "Bearer" + " " + token,
             "X-Website-Token": wt,
-            "X-BL": "en-US"
+            "X-BL": "en-US",
         }
         if _password:
             _url += f"&password={_password}"
